@@ -1,7 +1,17 @@
 node_modules
 dist
+build
+.next
+*.tsbuildinfo
+
 .env
 .env.local
+.env.*.local
+!.env.example
+
 *.log
 coverage
 .DS_Store
+Thumbs.db
+.vscode
+.idea
