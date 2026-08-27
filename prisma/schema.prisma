@@ -20,12 +20,30 @@ model User {
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
-  people_profile      PeopleProfile?
-  submitted_ideas     Idea[]              @relation("IdeaSubmittedBy")
-  idea_status_changes IdeaStatusHistory[] @relation("IdeaStatusActor")
-  sessions            Session[]
+  people_profile       PeopleProfile?
+  submitted_ideas      Idea[]               @relation("IdeaSubmittedBy")
+  idea_status_changes  IdeaStatusHistory[]  @relation("IdeaStatusActor")
+  sessions             Session[]
+  growth_level_changes GrowthLevelHistory[] @relation("GrowthLevelSubject")
+  growth_level_actions GrowthLevelHistory[] @relation("GrowthLevelActor")
 
   @@map("users")
+}
+
+model GrowthLevelHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  from_level String?
+  to_level   String
+  reason     String   @db.Text
+  actor_id   String   @db.Uuid
+  created_at DateTime @default(now())
+
+  user  User @relation("GrowthLevelSubject", fields: [user_id], references: [id], onDelete: Cascade)
+  actor User @relation("GrowthLevelActor", fields: [actor_id], references: [id], onDelete: Restrict)
+
+  @@index([user_id])
+  @@map("growth_level_history")
 }
 
 model Session {
@@ -97,9 +115,9 @@ model Course {
 model Project {
   id                 String   @id @default(uuid()) @db.Uuid
   name               String
-  client_or_category String
-  problem            String   @db.Text
-  solution           String   @db.Text
+  client_or_category String?
+  problem            String?  @db.Text
+  solution           String?  @db.Text
   technologies       String[]
   result             String?  @db.Text
   status             String // in_progress | completed

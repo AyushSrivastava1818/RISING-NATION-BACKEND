@@ -11,6 +11,7 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().default('http://localhost:3000'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   S3_ENDPOINT: z.string().optional().default('https://s3.amazonaws.com'),
+  S3_REGION: z.string().optional().default('us-east-1'),
   S3_BUCKET: z.string().optional().default('risingnation-media'),
   S3_ACCESS_KEY_ID: z.string().optional().default(''),
   S3_SECRET_ACCESS_KEY: z.string().optional().default(''),

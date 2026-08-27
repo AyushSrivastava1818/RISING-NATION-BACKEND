@@ -4,6 +4,11 @@ import { publicIdeaRouter } from './idea.routes.js';
 import { adminIdeaRouter } from './admin-idea.routes.js';
 import { courseRouter, categoryRouter } from './course.routes.js';
 import { adminCourseRouter } from './admin-course.routes.js';
+import { projectRouter } from './project.routes.js';
+import { adminProjectRouter } from './admin-project.routes.js';
+import { peopleRouter } from './people.routes.js';
+import { adminPeopleRouter } from './admin-people.routes.js';
+import { adminGrowthRouter } from './admin-growth.routes.js';
 import { requireAdmin, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const apiRouter = Router();
@@ -26,6 +31,10 @@ apiRouter.use(publicIdeaRouter);
 apiRouter.use('/courses', courseRouter);
 apiRouter.use('/categories', categoryRouter);
 
+// Public showcase routes — no auth
+apiRouter.use('/projects', projectRouter);
+apiRouter.use('/people', peopleRouter);
+
 // Admin routes with shared requireAdmin middleware
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
@@ -44,5 +53,14 @@ adminRouter.use('/ideas', adminIdeaRouter);
 
 // Admin course routes (POST/PATCH/DELETE /admin/courses)
 adminRouter.use('/courses', adminCourseRouter);
+
+// Admin project routes (CRUD + media attach)
+adminRouter.use('/projects', adminProjectRouter);
+
+// Admin people routes (CRUD + photo attach) — growth_level excluded, see below
+adminRouter.use('/people', adminPeopleRouter);
+
+// PATCH /admin/users/:id/growth-level — its own route, not folded into people-edit
+adminRouter.use('/users', adminGrowthRouter);
 
 apiRouter.use('/admin', adminRouter);

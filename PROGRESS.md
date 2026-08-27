@@ -5,10 +5,10 @@
 - [x] auth
 - [x] idea pipeline
 - [x] learning/courses
-- [ ] showcase (projects/people)
+- [x] showcase (projects/people, growth ladder)
 - [ ] opportunities
 - [ ] enquiries
-- [ ] media upload
+- [x] media upload (signed-upload flow: project screenshots, people photos)
 - [ ] observability
 - [ ] deployment config
 - [ ] frontend pages
