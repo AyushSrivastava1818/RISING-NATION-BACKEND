@@ -1,0 +1,286 @@
+// Prisma Schema — Rising Nation Platform
+// Matches DATABASE.md specifications exactly
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String
+  email         String   @unique
+  password_hash String?
+  role          String   @default("public") // public | member | admin
+  growth_level  String?  @default("learner") // learner | contributor | intern | builder | lead
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  people_profile        PeopleProfile?
+  submitted_ideas       Idea[]               @relation("IdeaSubmittedBy")
+  reviewed_ideas        Idea[]               @relation("IdeaReviewedBy")
+  idea_status_changes   IdeaStatusHistory[]  @relation("IdeaStatusChangedBy")
+  applications          Application[]
+  enquiries             Enquiry[]
+  growth_level_received GrowthLevelHistory[] @relation("GrowthLevelUser")
+  growth_level_given    GrowthLevelHistory[] @relation("GrowthLevelPromoter")
+
+  @@map("users")
+}
+
+model PeopleProfile {
+  id           String   @id @default(uuid()) @db.Uuid
+  user_id      String?  @unique @db.Uuid
+  name         String
+  role_title   String
+  group        String // founding | core | contributor | builder | mentor | industry | partner
+  short_intro  String?  @db.Text
+  skills       String[]
+  linkedin_url String?
+  photo_url    String?
+  featured     Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  user            User?           @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  project_members ProjectMember[]
+
+  @@index([featured])
+  @@map("people_profiles")
+}
+
+model Category {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  slug       String   @unique
+  type       String // learning | service
+  group      String? // e.g. business | creator
+  created_at DateTime @default(now())
+
+  courses Course[]
+
+  @@index([type])
+  @@map("categories")
+}
+
+model Course {
+  id             String   @id @default(uuid()) @db.Uuid
+  title          String
+  description    String?  @db.Text
+  level          String // Beginner | Intermediate | Advanced
+  category_id    String   @db.Uuid
+  content_source String // youtube | native
+  content_ref    String // YouTube video/playlist ID or native content reference
+  thumbnail_url  String?
+  published      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  category Category @relation(fields: [category_id], references: [id], onDelete: Restrict)
+
+  @@index([category_id, published])
+  @@map("courses")
+}
+
+model Project {
+  id                 String   @id @default(uuid()) @db.Uuid
+  name               String
+  client_or_category String
+  problem            String   @db.Text
+  solution           String   @db.Text
+  technologies       String[]
+  result             String?  @db.Text
+  status             String // in_progress | completed
+  featured           Boolean  @default(false)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  media         ProjectMedia[]
+  members       ProjectMember[]
+  opportunities Opportunity[]
+
+  @@index([featured])
+  @@map("projects")
+}
+
+model ProjectMedia {
+  id         String   @id @default(uuid()) @db.Uuid
+  project_id String   @db.Uuid
+  media_url  String
+  media_type String // image | video
+  created_at DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@map("project_media")
+}
+
+model ProjectMember {
+  id                String   @id @default(uuid()) @db.Uuid
+  project_id        String   @db.Uuid
+  profile_id        String   @db.Uuid
+  contribution_role String
+  created_at        DateTime @default(now())
+
+  project Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  profile PeopleProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, profile_id])
+  @@map("project_members")
+}
+
+model Idea {
+  id                   String   @id @default(uuid()) @db.Uuid
+  submitted_by         String?  @db.Uuid
+  title                String
+  problem              String   @db.Text
+  proposed_solution    String   @db.Text
+  target_users         String   @db.Text
+  why_it_matters       String   @db.Text
+  current_stage        String
+  skills_team_required String?  @db.Text
+  document_url         String?
+  demo_url             String?
+  contact_email        String
+  contact_phone        String?
+  status               String   @default("submitted") // submitted | in_review | evaluated | credited | shortlisted | in_development
+  admin_notes          String?  @db.Text
+  reviewed_by          String?  @db.Uuid
+  version              Int      @default(1) // Optimistic locking
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  submitter      User?               @relation("IdeaSubmittedBy", fields: [submitted_by], references: [id], onDelete: SetNull)
+  reviewer       User?               @relation("IdeaReviewedBy", fields: [reviewed_by], references: [id], onDelete: SetNull)
+  status_history IdeaStatusHistory[]
+
+  @@index([status])
+  @@map("ideas")
+}
+
+model IdeaStatusHistory {
+  id          String   @id @default(uuid()) @db.Uuid
+  idea_id     String   @db.Uuid
+  from_status String?
+  to_status   String
+  changed_by  String?  @db.Uuid
+  notes       String?  @db.Text
+  created_at  DateTime @default(now())
+
+  idea  Idea  @relation(fields: [idea_id], references: [id], onDelete: Cascade)
+  actor User? @relation("IdeaStatusChangedBy", fields: [changed_by], references: [id], onDelete: SetNull)
+
+  @@index([idea_id])
+  @@map("ideas_status_history")
+}
+
+model Enquiry {
+  id                 String   @id @default(uuid()) @db.Uuid
+  type               String // business_solutions | creator_support
+  services_requested String[]
+  contact_name       String
+  contact_email      String
+  contact_phone      String?
+  message            String   @db.Text
+  status             String   @default("new") // new | contacted | closed
+  user_id            String?  @db.Uuid
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([type])
+  @@map("enquiries")
+}
+
+// Post-MVP Models (defined for schema completeness, migrations in Slice 9 / Post-MVP)
+
+model Opportunity {
+  id                 String   @id @default(uuid()) @db.Uuid
+  type               String // learner | contributor | internship | project | mentorship | industry | open_position
+  title              String
+  description        String   @db.Text
+  related_project_id String?  @db.Uuid
+  open               Boolean  @default(true)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  related_project Project?      @relation(fields: [related_project_id], references: [id], onDelete: SetNull)
+  applications    Application[]
+
+  @@index([open])
+  @@map("opportunities")
+}
+
+model Application {
+  id              String   @id @default(uuid()) @db.Uuid
+  opportunity_id  String   @db.Uuid
+  applicant_id    String?  @db.Uuid
+  applicant_name  String
+  applicant_email String
+  message         String   @db.Text
+  status          String   @default("received") // received | reviewed | accepted | rejected
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  opportunity Opportunity @relation(fields: [opportunity_id], references: [id], onDelete: Cascade)
+  applicant   User?       @relation(fields: [applicant_id], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([opportunity_id])
+  @@map("applications")
+}
+
+model GrowthLevelHistory {
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String   @db.Uuid
+  from_level  String?
+  to_level    String
+  reason      String   @db.Text
+  promoted_by String?  @db.Uuid
+  created_at  DateTime @default(now())
+
+  user     User  @relation("GrowthLevelUser", fields: [user_id], references: [id], onDelete: Cascade)
+  promoter User? @relation("GrowthLevelPromoter", fields: [promoted_by], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@map("growth_level_history")
+}
+
+model Announcement {
+  id         String   @id @default(uuid()) @db.Uuid
+  title      String
+  body       String   @db.Text
+  publish_at DateTime @default(now())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("announcements")
+}
+
+model Event {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  description String?  @db.Text
+  starts_at   DateTime
+  location    String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("events")
+}
+
+model ContentBlock {
+  id         String   @id @default(uuid()) @db.Uuid
+  page_key   String   @unique
+  content    Json
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("content_blocks")
+}
