@@ -15,15 +15,15 @@ This document records architectural, stack, and specification decisions resolved
 
 ---
 
-## Resolved Open Decisions (ENGINEERING.md §6.13)
+## Open Decisions (ENGINEERING.md §6.13)
 
 - **OD-1: Do students/creators/innovators need accounts?** → `(a) Admin-only V1` (source: ENGINEERING.md §6.13)
 - **OD-3: Exact `ideas.status` values and legal transitions** → `Proposed set: submitted | in_review | evaluated | credited | shortlisted | in_development with version-based optimistic locking` (source: ENGINEERING.md §6.13)
 - **OD-4: Block duplicate applications by email?** → `(a) Allow duplicates for V1` (source: ENGINEERING.md §6.13)
-- **OD-5: Which static content blocks need CMS editing?** → `Default standard set of page keys (home_intro, about_vision, about_mission, about_what_we_believe, about_future_direction) managed via /admin/content/:page_key` (source: ENGINEERING.md §6.13)
+- **OD-5: Which static content blocks need CMS editing?** → `PROVISIONAL — placeholder page_keys [home_intro, about_vision, about_mission, about_what_we_believe, about_future_direction] managed via /admin/content/:page_key — NOT a confirmed default, needs client/product confirmation before this is treated as final. Flagged because this requires enumeration with the client's content team and cannot use a made-up default (ENGINEERING.md §6.13: "N/A — needs a working session, not an engineering default"); any admin content-CRUD built against these keys (page_key column, validation enums) may need a migration once real keys are confirmed.`
 - **OD-6: Hosting provider** → `Stateless containerized backend on Docker-compatible hosting with managed PostgreSQL and S3-compatible storage per §6.8 topology` (source: ENGINEERING.md §6.13)
 - **OD-7: Do Events/Announcements need public pages, and what fields?** → `Ship placeholder schema, admin-only, until confirmed` (source: ENGINEERING.md §6.13)
-- **OD-8: What does "Credits/Recognition" consist of?** → `Tracked via idea status (credited) and admin notes in MVP, no points ledger` (source: ENGINEERING.md §6.13)
+- **OD-8: What does "Credits/Recognition" consist of?** → `PROVISIONAL — no credits/points mechanism or ledger implemented in MVP (deferred entirely to Future scope) — NOT a confirmed default, needs client/product confirmation before this is treated as final. Flagged because spec describes the outcome only without defining a mechanism (ENGINEERING.md §6.13: "No default proposed — spec states the outcome, not the mechanism / N/A") and REQUIREMENTS.md places this in Future; no code or ledger will be built for this in MVP slices.`
 - **OD-9: Is CAPTCHA needed on public forms?** → `(a) Not built for V1, rate-limiting only` (source: ENGINEERING.md §6.13)
-- **OD-10: Data retention policy** → `Daily automated database backups with standard 30-day retention; private idea documents retained privately until review closure` (source: ENGINEERING.md §6.13)
+- **OD-10: Data retention policy (idea documents, backups, member PII if applicable)** → `PROVISIONAL — placeholder 30-day automated backup retention and private idea document retention — NOT a confirmed default, needs client/product confirmation before this is treated as final. Flagged because this is a policy decision and potential compliance obligation, not an engineering one (ENGINEERING.md §6.13: "No default — policy decision, not engineering / N/A"); retention windows in deployment/infrastructure config (Slice 8) are placeholders pending confirmation, not final infrastructure configuration.`
 - **OD-11: Individually-attributable admin accounts, or one shared login?** → `(a) Individual accounts` (source: ENGINEERING.md §6.13)
