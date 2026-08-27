@@ -44,6 +44,17 @@ FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
+# node:*-bookworm-slim doesn't ship OpenSSL. Without it, Prisma's query
+# engine can't detect the runtime's actual libssl version, falls back to a
+# guess that doesn't match what was generated in the build stage, and the
+# process crashes on the first Prisma Client call ("could not locate the
+# Query Engine for runtime ..."). Installing openssl here (matching the
+# build stage's Debian base, so the same engine binary is valid in both) is
+# what the Prisma error itself recommends.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system app && useradd --system --gid app --home /app app
 
 COPY --from=build /app/node_modules ./node_modules

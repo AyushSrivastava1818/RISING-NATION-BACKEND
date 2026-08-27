@@ -28,6 +28,45 @@ docker build -t rising-nation-backend .
 docker run --rm -p 4000:4000 --env-file .env rising-nation-backend
 ```
 
+Verified end-to-end (build → run → liveness/readiness → both failure modes)
+on 2026-08-27/28 against this Dockerfile; see "Verification log" at the
+bottom of this document for the actual commands and output. That pass
+caught and fixed one real bug (Prisma's query engine failing to start in
+the runtime image — see the Dockerfile's `runtime` stage comment) and
+surfaced the two gotchas below, which aren't bugs in this repo but will trip
+up anyone following the snippet above literally:
+
+- **`--env-file` does not strip quotes.** `.env`/`.env.example` in this repo
+  wrap values in double quotes (`DATABASE_URL="postgresql://..."`), which is
+  fine for `dotenv` (used by `src/config/index.ts` in local `npm run dev`)
+  but `docker run --env-file` passes each line's value through *literally*,
+  quotes included — `DATABASE_URL` would end up containing the quote
+  characters and fail to parse as a connection string. Strip the quotes
+  (or use an env file written without them) before passing it to
+  `--env-file`.
+- **`localhost` inside the container is the container, not your host.** To
+  point a locally-run container at a Postgres instance running on your
+  host machine (not in a container), use `host.docker.internal` in
+  `DATABASE_URL` instead of `localhost`, and pass
+  `--add-host=host.docker.internal:host-gateway` to `docker run` (needed on
+  Linux; Docker Desktop on Mac/Windows resolves it automatically, but the
+  flag is harmless there too).
+
+## Health-check endpoint paths: `/api/health` and `/api/ready`, not bare `/health`/`/ready`
+
+`ENGINEERING.md` §6.5 phrases the health checks as `GET /health` and
+`GET /ready`. As actually implemented (`src/api/index.ts`), both are mounted
+under the API's `/api` base path — `GET /api/health` and `GET /api/ready` —
+consistent with every other route in this API (`app.ts` mounts the whole
+`apiRouter` at `/api`; there is no bare `/health` or `/ready` route). This
+is a phrasing gap in §6.5, not a deviation in the code — worth flagging here
+because it's exactly the kind of thing that's easy to get wrong once, in a
+load balancer or orchestrator's health-check path config, and then have
+silently misroute/misjudge instance health from then on. Whoever configures
+a real health check against this service should point it at `/api/health`
+and `/api/ready`, confirmed against the Dockerfile's own `HEALTHCHECK`
+instruction, which already uses `/api/health`.
+
 ## Environment variables (`ENGINEERING.md` §6.9)
 
 `src/config/index.ts` validates `process.env` against a Zod schema **at
@@ -196,3 +235,40 @@ splitting the suite by §6.6's tiers is test-layer work, out of scope for this
 deployment-config slice (no new business logic). `migration-deploy-check`
 remains its own explicit gate regardless, per the specific gap it exists to
 catch.
+
+## Verification log
+
+Manually verified end-to-end against a real Docker Desktop daemon and the
+local Postgres instance on 2026-08-27/28, since none of this had actually
+been executed before (only reasoned about) when first written:
+
+1. `docker build -t rising-nation-backend .` — completed successfully.
+   First run took ~30 minutes purely on network-throttled base-image/`apt`/
+   `npm ci` pulls in that environment (confirmed progressing, not stalled,
+   by comparing bytes-downloaded across checks); the actual build steps
+   (`prisma generate`, `tsc`, `npm prune`) ran in seconds once dependencies
+   were present. Image: `735MB`.
+2. First `docker run` **failed** — container exited immediately with
+   `PrismaClientInitializationError: ... could not locate the Query Engine
+   for runtime "debian-openssl-1.1.x"`. Root cause: `node:22-bookworm-slim`
+   doesn't ship OpenSSL, so Prisma's engine couldn't detect the runtime's
+   actual libssl version and guessed wrong. Fixed by installing `openssl`
+   in the `runtime` stage (see Dockerfile). Rebuilt, confirmed fixed.
+3. `docker run -d -p 4000:4000 --env-file <full .env>` — container reached
+   `Up ... (healthy)` per its own `HEALTHCHECK`, stayed up (not
+   restarting).
+4. `curl -i http://localhost:4000/api/health` → `200 {"status":"ok"}`.
+5. `curl -i http://localhost:4000/api/ready` with Postgres reachable →
+   `200 {"status":"ready"}`. Restarted the container with `DATABASE_URL`
+   pointed at an unreachable port → `503 {"status":"not_ready"}`, container
+   stayed up (readiness fails per-request, not by crashing).
+6. Restarted the container with `DATABASE_URL` removed from the env file
+   entirely → exited immediately (`Exited (1)`), `docker logs` showing
+   `Invalid environment configuration (ENGINEERING.md §6.9): -
+   DATABASE_URL: Required` before any listener started — confirms the
+   fail-fast-at-startup design actually behaves as designed, not just in
+   the unit-level check run during development.
+
+Test container and the scratch `--env-file` copies used for this pass were
+removed after verification; nothing from this section is checked into the
+image or the repo's real `.env`.
