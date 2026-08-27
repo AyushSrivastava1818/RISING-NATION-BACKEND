@@ -206,34 +206,43 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
     });
   });
 
-  describe('Idea State Machine Unit Tests', () => {
+  describe('Idea State Machine Unit Tests (ARCHITECTURE.md §3.7)', () => {
+    // Legal forward transitions plus the two explicit reopen edges from §3.7
     const legalTransitions: [IdeaStatus, IdeaStatus][] = [
-      ['submitted', 'in_review'],
-      ['in_review', 'evaluated'],
-      ['evaluated', 'credited'],
-      ['evaluated', 'shortlisted'],
-      ['evaluated', 'in_development'],
-      ['credited', 'shortlisted'],
-      ['credited', 'in_development'],
-      ['shortlisted', 'in_development'],
+      // Forward path
+      ['submitted',    'in_review'],
+      ['in_review',    'evaluated'],
+      ['evaluated',    'credited'],
+      ['evaluated',    'shortlisted'],
+      ['credited',     'shortlisted'],
+      ['shortlisted',  'in_development'],
+      // Reopen edges (§3.7 diagram — explicit backward arrows)
+      ['in_review',    'submitted'],   // reopen: back to submitter
+      ['evaluated',    'in_review'],   // reopen: back for further review
     ];
 
     it.each(legalTransitions)('allows legal transition: %s -> %s', (from, to) => {
       expect(isLegalIdeaTransition(from, to)).toBe(true);
     });
 
+    // Illegal transitions — includes the two unauthorized §3.7 shortcuts
+    // (evaluated/credited -> in_development) which skip the required shortlisted gate
     const illegalTransitions: [IdeaStatus, IdeaStatus][] = [
-      ['submitted', 'evaluated'],
-      ['submitted', 'credited'],
-      ['submitted', 'shortlisted'],
-      ['submitted', 'in_development'],
-      ['in_review', 'credited'],
-      ['in_review', 'shortlisted'],
-      ['in_review', 'in_development'],
-      ['in_development', 'submitted'],
-      ['in_development', 'in_review'],
-      ['in_development', 'evaluated'],
-      ['shortlisted', 'submitted'],
+      ['submitted',     'evaluated'],
+      ['submitted',     'credited'],
+      ['submitted',     'shortlisted'],
+      ['submitted',     'in_development'],
+      ['in_review',     'credited'],
+      ['in_review',     'shortlisted'],
+      ['in_review',     'in_development'],
+      // Unauthorized shortcuts removed in §3.7 alignment:
+      ['evaluated',     'in_development'],  // must go via shortlisted
+      ['credited',      'in_development'],  // must go via shortlisted
+      // Terminal-state exits
+      ['in_development','submitted'],
+      ['in_development','in_review'],
+      ['in_development','evaluated'],
+      ['shortlisted',   'submitted'],
     ];
 
     it.each(illegalTransitions)('rejects illegal transition: %s -> %s', (from, to) => {
@@ -338,6 +347,114 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('validation_error');
+    });
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // §3.7 REOPEN TRANSITIONS — both must succeed (200)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    it('reopen: allows in_review -> submitted (ARCHITECTURE.md §3.7)', async () => {
+      // Advance to in_review first
+      const toReview = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 1, status: 'in_review' });
+      expect(toReview.status).toBe(200);
+
+      // Reopen: in_review -> submitted
+      const reopen = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 2, status: 'submitted', notes: 'Needs more information from submitter' });
+
+      expect(reopen.status).toBe(200);
+      expect(reopen.body.data.status).toBe('submitted');
+      expect(reopen.body.data.version).toBe(3);
+    });
+
+    it('reopen: allows evaluated -> in_review (ARCHITECTURE.md §3.7)', async () => {
+      // Advance: submitted -> in_review -> evaluated
+      const toReview = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 1, status: 'in_review' });
+      expect(toReview.status).toBe(200);
+
+      const toEval = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 2, status: 'evaluated' });
+      expect(toEval.status).toBe(200);
+
+      // Reopen: evaluated -> in_review
+      const reopen = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 3, status: 'in_review', notes: 'Sending back for further review' });
+
+      expect(reopen.status).toBe(200);
+      expect(reopen.body.data.status).toBe('in_review');
+      expect(reopen.body.data.version).toBe(4);
+    });
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // §3.7 REMOVED SHORTCUTS — direct jumps to in_development must be 409
+    // ──────────────────────────────────────────────────────────────────────────
+
+    it('rejects evaluated -> in_development shortcut with 409 (must go via shortlisted)', async () => {
+      // Advance: submitted -> in_review -> evaluated
+      const toReview = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 1, status: 'in_review' });
+      expect(toReview.status).toBe(200);
+
+      const toEval = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 2, status: 'evaluated' });
+      expect(toEval.status).toBe(200);
+
+      // Shortcut attempt: evaluated -> in_development (illegal per §3.7)
+      const shortcut = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 3, status: 'in_development' });
+
+      expect(shortcut.status).toBe(409);
+      expect(shortcut.body.error.code).toBe('conflict');
+      expect(shortcut.body.error.message).toContain('Illegal status transition');
+    });
+
+    it('rejects credited -> in_development shortcut with 409 (must go via shortlisted)', async () => {
+      // Advance: submitted -> in_review -> evaluated -> credited
+      const toReview = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 1, status: 'in_review' });
+      expect(toReview.status).toBe(200);
+
+      const toEval = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 2, status: 'evaluated' });
+      expect(toEval.status).toBe(200);
+
+      const toCredited = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 3, status: 'credited' });
+      expect(toCredited.status).toBe(200);
+
+      // Shortcut attempt: credited -> in_development (illegal per §3.7)
+      const shortcut = await request(app)
+        .patch(`/api/admin/ideas/${testIdeaId}`)
+        .set('Cookie', adminSessionCookie)
+        .send({ version: 4, status: 'in_development' });
+
+      expect(shortcut.status).toBe(409);
+      expect(shortcut.body.error.code).toBe('conflict');
+      expect(shortcut.body.error.message).toContain('Illegal status transition');
     });
   });
 

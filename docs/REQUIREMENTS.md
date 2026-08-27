@@ -1,133 +1,196 @@
-# Requirements — Rising Nation Website
+# Requirements — Rising Nation
 
-Source: `RN-START-UPDATED.pdf` ("Rising Nation Website — Development Requirements"). All items below are **Confirmed (spec)** unless marked otherwise. This document restructures the PDF for traceability; it does not add scope.
+Source: `RN-START-UPDATED.pdf` ("Rising Nation Website — Development Requirements"). This is the authoritative functional specification — if any other document in this set disagrees with it, the other document is wrong. Every requirement below is **Confirmed** unless tagged **Inferred**. Requirement IDs (`REQ-<DOMAIN>-<N>`) are introduced here for traceability into `API.md`.
 
-## 1. Home
+## Product Goals
 
-- Rising Nation introduction, vision + mission, short ecosystem explanation.
-- Four main sections surfaced: Student Innovation Hub, Business Solutions, Creator Support, Idea → Product.
-- Featured projects, featured people/community.
-- Primary CTA: Join / Work With Us / Submit an Idea.
+Rising Nation is a technology/innovation organization platform serving four purposes at once: free technical education with real project experience (Student Innovation Hub), a public idea-intake and evaluation pipeline (Idea Submission), a service-enquiry funnel for paying clients (Business Solutions), and a service-enquiry funnel for content creators (Creator Support). All four surface into shared Projects and People showcases, managed through a single admin/CMS layer. The platform must read as a professional technology/innovation organization — not a college club or generic agency (Confirmed, Final Requirement).
 
-**Inferred:** Home is a composed/aggregating view — it needs "featured" flags on Projects and on People profiles so admin can curate what surfaces here, rather than Home querying full lists.
+## Users / Actors
 
-## 2. About Rising Nation
+| Actor | Responsibilities | Capabilities | Access level |
+|---|---|---|---|
+| **Visitor** | Browses public content, chooses a path | Read all published content; submit Idea, Enquiry, Application | Public, unauthenticated |
+| **Student** | Learns, contributes to real projects, progresses through the Growth ladder | Same as Visitor; progression tracked by admin | Public (V1) — see `REQ-AUTH-001` |
+| **Business client** | Seeks paid services | Submit project enquiry | Public |
+| **Creator** | Seeks content/growth services | Submit creator enquiry | Public |
+| **Innovator** | Submits an idea for evaluation | Submit idea, no further platform access required | Public |
+| **Admin** | Reviews and manages all content and workflow state | Full CRUD on Courses, Projects, People, Opportunities, Ideas, Events, Announcements, website content; review/transition idea status; set growth level | Authenticated, `role = admin` |
 
-Static/CMS-editable content: Who we are, Why we started, Vision, Mission, What we believe, What we are building, Future direction.
+**Inferred:** Student/Business/Creator/Innovator are behavioral roles, not distinct accounts — the same anonymous visitor can act as any of them in a single session, since V1 has no login for non-admin users (`REQ-AUTH-001`).
 
-**Inferred:** This is pure content (no relational entities needed) — a single CMS-managed page/document, not a table with rows.
+## Functional Requirements
 
-## 3. Student Innovation Hub
+### Home (`REQ-HOME`)
 
-Purpose (spec): *"Free learning + real project experience + builder development."*
+- `REQ-HOME-001`: Home displays Rising Nation introduction, vision + mission, ecosystem explanation.
+- `REQ-HOME-002`: Home surfaces four entry points: Student Innovation Hub, Business Solutions, Creator Support, Idea → Product.
+- `REQ-HOME-003`: Home displays featured projects and featured people/community. **Inferred:** requires a `featured` flag on Projects and People so admin curates what appears, rather than Home querying full lists.
+- `REQ-HOME-004`: Primary CTA — Join / Work With Us / Submit an Idea.
 
-### 3.1 Learning
-- Free courses/resources, arranged by category.
-- Each course opens the relevant YouTube playlist/video (embed or external redirect).
-- Categories (spec, non-exhaustive — "and other relevant technologies"): Web Development, AI/ML, DevOps, Cybersecurity / Ethical Hacking, Data, Design, Marketing, Business.
-- Course card fields (spec): thumbnail, course name, short description, level, YouTube link.
-- **Hard constraint (spec):** the system must allow replacing YouTube-sourced courses with Rising Nation's own courses later **without redesigning the system.** This drives the `content_source` abstraction in `ARCHITECTURE.md`.
+### About (`REQ-ABOUT`)
 
-### 3.2 Build
-- Real projects, team participation, contributor opportunities, practical assignments, portfolio building, mentorship, industry exposure.
+- `REQ-ABOUT-001`: Static/CMS-editable content — Who we are, Why we started, Vision, Mission, What we believe, What we are building, Future direction. **Inferred:** pure content, no relational entities.
 
-**Inferred:** "Build" overlaps structurally with the Projects and Opportunities entities (Section 8, Section 10) rather than being a separate content type — a contributor opportunity on a real project *is* an Opportunity record scoped to a Project.
+### Student Innovation Hub — Learning (`REQ-LEARN`)
 
-### 3.3 Growth
-- Ladder: **Learner → Contributor → Intern → Builder → Lead.**
-- Spec: progression depends on *work, consistency, contribution and capability* — not on time-in-program or self-declaration.
+- `REQ-LEARN-001`: Free courses/resources arranged by category.
+- `REQ-LEARN-002`: Each course opens the relevant YouTube playlist/video (embed or external redirect).
+- `REQ-LEARN-003`: Categories (non-exhaustive): Web Development, AI/ML, DevOps, Cybersecurity/Ethical Hacking, Data, Design, Marketing, Business.
+- `REQ-LEARN-004`: Course card fields — thumbnail, name, short description, level, YouTube link.
+- `REQ-LEARN-005` **(hard constraint)**: the system must allow replacing YouTube-sourced courses with Rising Nation's own courses later **without redesigning the system.**
 
-**Inferred:** This requires a `growth_level` field on the user/profile plus an auditable way to justify a promotion (admin action, not automatic) — see `DATABASE.md`.
+### Student Innovation Hub — Build (`REQ-BUILD`)
 
-## 4. Idea Submission
+- `REQ-BUILD-001`: Real projects, team participation, contributor opportunities, practical assignments, portfolio building, mentorship, industry exposure. **Inferred:** implemented via the Projects (`REQ-PROJ`) and Opportunities (`REQ-OPP`) domains, not a separate content type — a contributor opportunity on a real project is an Opportunity scoped to a Project.
 
-Form fields (spec, exact list):
-- Idea title
-- Problem being solved
-- Proposed solution
-- Target users
-- Why the idea matters
-- Current stage
-- Skills/team required
-- Optional document/demo/link
-- Contact details
+### Student Innovation Hub — Growth (`REQ-GROWTH`)
 
-Pipeline (spec): **Idea → Review → Evaluation → Credits/Recognition → Possible Development.**
+- `REQ-GROWTH-001`: Ladder — Learner → Contributor → Intern → Builder → Lead.
+- `REQ-GROWTH-002`: Progression depends on work, consistency, contribution, and capability — not time-in-program or self-declaration. **Inferred:** admin-driven promotion with an auditable justification, not an automatic formula (see `REQ-GROWTH-RULE` below).
 
-Explicit constraints (spec):
-- Good ideas get recognition/credits based on quality and contribution.
-- Strong ideas *can be considered* for further validation/development.
-- **The platform must not promise funding or product development for every submission** — this is a copy/UX constraint (status labels, confirmation messaging) as much as a data one.
-- Admin/team must be able to review, shortlist, and update idea status.
+### Idea Submission (`REQ-IDEA`)
 
-## 5. Business Solutions
+- `REQ-IDEA-001`: Public submission form — title, problem being solved, proposed solution, target users, why the idea matters, current stage, skills/team required, optional document/demo/link, contact details.
+- `REQ-IDEA-002`: Pipeline — Idea → Review → Evaluation → Credits/Recognition → Possible Development.
+- `REQ-IDEA-003`: Good ideas receive recognition/credits based on quality and contribution.
+- `REQ-IDEA-004`: Strong ideas can be considered for further validation/development.
+- `REQ-IDEA-005` **(hard constraint)**: the platform must not promise funding or product development for every submission — applies to confirmation copy and status messaging, not only data.
+- `REQ-IDEA-006`: Admin/team can review, shortlist, and update idea status.
 
-Services listed (spec): Website development, Software development, AI solutions, Automation, Digital solutions, Branding, Content, Social media, Marketing, Product development, Maintenance/support.
-Plus: a project enquiry form.
+### Business Solutions (`REQ-BIZ`)
 
-**Inferred:** Services are a curated list (likely CMS-editable, not user-generated); the enquiry form needs to capture which service(s) the enquiry concerns.
+- `REQ-BIZ-001`: Services listed — Website development, Software development, AI solutions, Automation, Digital solutions, Branding, Content, Social media, Marketing, Product development, Maintenance/support.
+- `REQ-BIZ-002`: Project enquiry form. **Inferred:** must capture which service(s) the enquiry concerns; services are curated (CMS-editable), not user-invented.
 
-## 6. Creator Support
+### Creator Support (`REQ-CREATOR`)
 
-Services listed (spec): Reels/video editing, Content creation, Content strategy, Branding, Instagram management, Growth support, Account management.
-Plus: a creator enquiry form.
+- `REQ-CREATOR-001`: Services listed — Reels/video editing, Content creation, Content strategy, Branding, Instagram management, Growth support, Account management.
+- `REQ-CREATOR-002`: Creator enquiry form.
 
-## 7. Idea → Product
+### Idea → Product explainer (`REQ-I2P`)
 
-Process shown (spec): **IDEA → VALIDATE → DESIGN → BUILD → TEST → LAUNCH → GROW.**
-Teams referenced (spec): Technology, Product, Design, AI, Marketing, Business support, Industry guidance.
-CTA (spec): "Submit Your Idea."
+- `REQ-I2P-001`: Process shown — IDEA → VALIDATE → DESIGN → BUILD → TEST → LAUNCH → GROW. Teams referenced — Technology, Product, Design, AI, Marketing, Business support, Industry guidance. CTA — "Submit Your Idea." **Inferred:** presentational; reuses `REQ-IDEA`'s form and pipeline rather than introducing a new one.
 
-**Inferred:** This section is presentational (explains the process to visitors) — it reuses the Idea Submission entity/flow from Section 4 rather than introducing a new one.
+### Projects (`REQ-PROJ`)
 
-## 8. Projects
+- `REQ-PROJ-001`: Per-project fields — name, client/category, problem, solution, technologies, team, result, screenshots/media, status. **Inferred:** "team" is a relation to People profiles (`REQ-PEOPLE`), not free text, so a contributor's project history is visible on their own profile.
 
-Per-project fields (spec, exact list): name, client/category, problem, solution, technologies, team, result, screenshots/media, status.
+### People & Network (`REQ-PEOPLE`)
 
-**Inferred:** "team" implies a relation to People/Network profiles (Section 9), not a free-text field, so a contributor's project history can be shown on their own profile.
+- `REQ-PEOPLE-001`: Groups — Founding Team, Core Team, Contributors, Builders, Mentors, Industry Professionals, Partners.
+- `REQ-PEOPLE-002`: Per-profile fields — Name, Role, Short introduction, Skills/Expertise, LinkedIn. **Inferred:** "group" is a category/tag on one entity, not seven tables — a person can hold more than one.
 
-## 9. People & Network
+### Opportunities (`REQ-OPP`)
 
-Groups (spec): Founding Team, Core Team, Contributors, Builders, Mentors, Industry Professionals, Partners.
-Per-profile fields (spec, exact list): Name, Role, Short introduction, Skills/Expertise, LinkedIn.
+- `REQ-OPP-001`: Types — Learner, Contributor, Internship, Project opportunities, Mentorship, Industry opportunities, Open positions.
+- `REQ-OPP-002`: Application system.
 
-**Inferred:** "Group" here is best modeled as a category/tag on a single People entity, not seven separate tables — a person can plausibly hold more than one (e.g., a Builder who is also a Mentor).
+### Admin / Content Management (`REQ-ADMIN`)
 
-## 10. Opportunities
+- `REQ-ADMIN-001`: Admin can add/edit/remove — Courses, YouTube links, Thumbnails, Projects, Team members, Opportunities, Ideas, Mentors, Events, Announcements, Website content.
+- `REQ-ADMIN-002` **(hard constraint, restated)**: Learning system supports YouTube-based free learning now and native courses later, without a rebuild (same constraint as `REQ-LEARN-005`).
 
-Types (spec): Learner, Contributor, Internship, Project opportunities, Mentorship, Industry opportunities, Open positions.
-Requirement (spec): an application system.
+### Authentication (`REQ-AUTH`) — Inferred, not directly stated
 
-## 11. Admin / Content Management
+- `REQ-AUTH-001`: Admin actions require authentication (Confirmed, implied by `REQ-ADMIN-001`/`REQ-IDEA-006`). Whether general visitors/students require accounts is **Open Decision OD-1** — see below.
 
-Admin must be able to add/edit/remove (spec, exact list): Courses, YouTube links, Thumbnails, Projects, Team members, Opportunities, Ideas, Mentors, Events, Announcements, Website content.
+## User Flows
 
-**Hard constraint (spec, restated):** the course/learning system must support YouTube-based free learning now and native Rising Nation courses later, without a rebuild.
+### Visitor
+```mermaid
+flowchart LR
+    A[Land on Home] --> B[Explore Rising Nation]
+    B --> C{Choose a path}
+    C --> D[Student]
+    C --> E[Business]
+    C --> F[Creator]
+    C --> G[Innovator]
+```
 
-**Inferred:** "Events" and "Announcements" are mentioned only here — not defined elsewhere in the spec (no fields given). Treated as **Needs confirmation** in `DATABASE.md`.
+### Student
+```mermaid
+flowchart LR
+    A[Student Innovation Hub] --> B[Free Learning]
+    B --> C[Projects]
+    C --> D[Contribution]
+    D --> E[Portfolio]
+    E --> F[Opportunities]
+```
+Growth ladder progression applies within this flow but is admin-driven, not a self-service step.
 
-## 12. Core User Flow
+### Business
+```mermaid
+flowchart LR
+    A[Business Solutions page] --> B[Project enquiry form]
+    B --> C[Discussion - offline/manual]
+    C --> D[Project]
+```
 
-Four confirmed journeys, reproduced verbatim in structure:
+### Creator
+```mermaid
+flowchart LR
+    A[Creator Support page] --> B[Enquiry]
+    B --> C[Service - offline/manual]
+```
 
-- **Visitor** → Explore Rising Nation → Choose their path
-- **Student** → SIH → Free Learning → Projects → Contribution → Portfolio → Opportunities
-- **Business** → Solutions → Project enquiry → Discussion → Project
-- **Creator** → Creator Support → Enquiry → Service
-- **Innovator** → Submit Idea → Review → Credits/Recognition → Validation → Possible Product Development
+### Innovator (idea submission, detailed)
+```mermaid
+flowchart TD
+    A[User] --> B[Submit Idea]
+    B --> C[Validate]
+    C --> D[Persist]
+    D --> E[Admin Review]
+    E --> F{Decision}
+    F -->|Strong| G[Credits/Recognition]
+    F -->|Weak| H[Closed - no further action]
+    G --> I[Validation]
+    I --> J[Possible Product Development]
+```
+Section 7's public "Idea → Product" explainer reuses this same pipeline and CTA — it is not a distinct flow.
 
-Full diagrams in `USER_FLOWS.md`.
+## Functional Rules
 
-## Final Requirement (spec, verbatim intent)
+- **Who can submit an idea/enquiry/application?** Anyone — no authentication required (`REQ-IDEA-001`, `REQ-BIZ-002`, `REQ-CREATOR-002`, `REQ-OPP-002`).
+- **Who can review ideas and change their status?** Admin only (`REQ-IDEA-006`).
+- **What makes an Opportunity "open"?** **Inferred, not specified:** proposed as a boolean flag admin toggles directly — the spec doesn't define an automatic closing condition (e.g., a deadline or an applicant cap). Treated as an admin action only unless told otherwise.
+- **What happens when an idea is not selected for further development?** **Not specified.** The spec describes the positive path (review → evaluation → credits → possible development) but not an explicit rejection state or notification. Proposed as a terminal status (e.g., `closed`) reachable from review/evaluation, with no promise of notification — flagged as `REQ-GROWTH-RULE` open item below rather than invented.
+- **How are Projects related to Ideas?** **Not specified.** The spec never states that an idea, once developed, becomes a Project record, or how that linkage would be tracked. Treated as a manual admin action (admin creates a Project separately once an idea is greenlit) rather than an automatic conversion, since no field or relationship for this is described.
+- **How is recognition/credit assigned?** **Not specified beyond the outcome** ("good ideas receive recognition/credits based on quality and contribution" — `REQ-IDEA-003`). The mechanism (points, badges, certificate, nothing user-facing) is Open Decision OD-8.
+- **REQ-GROWTH-RULE:** growth-level changes require admin action and a stated reason; no automatic promotion formula exists because the spec ties progression to a qualitative judgment ("capability") the data can't compute unassisted.
 
-The site must read as a professional technology/innovation organization, not a college club or generic agency. Constraints called out explicitly: simple navigation, strong visuals, real projects, real people, clear opportunities, fast performance, **mobile-first**, easy content management, ready to expand as Rising Nation grows.
+## Non-Functional Requirements
 
-## Open items — Needs confirmation
+| Category | Requirement |
+|---|---|
+| Performance | Fast page loads (Confirmed, Final Requirement — "fast performance"); no numeric target specified — treated as Open Decision OD-2 if a client SLA is required later. |
+| Availability | No explicit uptime target specified. Standard managed-hosting availability assumed sufficient given no stated business-critical real-time dependency. |
+| Scalability | "Ready to expand as Rising Nation grows" (Confirmed) — interpreted as: no unbounded queries, pagination on all list views, schema that supports growth without redesign (directly drives `REQ-LEARN-005`). |
+| Security | Not explicitly specified beyond implied admin-gating (`REQ-AUTH-001`). Full threat model in `ENGINEERING.md` §6.1. |
+| Accessibility | Not specified. No WCAG target stated — Recommended baseline (semantic HTML, sufficient color contrast) rather than a formal compliance target, pending client confirmation. |
+| Mobile | **Confirmed, explicit** — "mobile-first" (Final Requirement). |
+| Maintainability | "Easy content management" (Confirmed) — drives the admin/CMS design in `ARCHITECTURE.md`. |
 
-These are referenced by the spec but not specified in enough detail to design against without guessing:
+## Scope
 
-1. **Events** and **Announcements** — no fields, no relation to other entities, no public-facing section described (only appear in the Admin list, Section 11).
-2. **Authentication scope** — the spec requires admin-gated actions (review ideas, edit content) and implies user-facing accounts (growth ladder, portfolios, "Contributor" status), but never states whether general visitors/students register for accounts or whether only admin/internal staff authenticate.
-3. **Payment/commerce** — Business Solutions and Creator Support are enquiry-based (spec), not checkout-based. No pricing, invoicing, or payment requirement is stated — assume none exists until told otherwise.
-4. **"Credits/Recognition"** (Section 4) — the mechanism (points? badges? public leaderboard? certificate?) is never defined, only the *outcome* ("good ideas receive recognition/credits").
-5. **Multi-language** — not mentioned; assume English-only.
+### MVP
+Home, About, Learning (YouTube-sourced), Business Solutions + enquiry, Creator Support + enquiry, Projects showcase, People & Network directory, Idea Submission + admin review, Admin CRUD for the above, admin-only authentication.
+
+### Post-MVP
+Opportunities + application system, growth ladder admin UI, Events, Announcements, member accounts (if OD-1 confirms they're needed).
+
+### Future
+Native course hosting, Credits/Recognition mechanism (once OD-8 is resolved), student portfolio pages.
+
+## Open Product Decisions
+
+Materially affects backend architecture — full register with defaults and owners in `ENGINEERING.md` §6.13. Listed here because they originate from requirements ambiguity, not engineering preference:
+
+- **OD-1**: Do Students/Creators/Innovators need accounts, or is admin the only authenticated role?
+- **OD-2**: Any specific performance SLA (page load time, uptime) the client requires?
+- **OD-3**: Exact idea-status values and the review team's actual process.
+- **OD-4**: Should the same person be blocked from applying twice to one Opportunity?
+- **OD-5**: What static content blocks actually need CMS editing beyond the sections explicitly named?
+- **OD-6**: Hosting provider preference.
+- **OD-7**: Do Events/Announcements need public pages, and what fields do they need?
+- **OD-8**: What does "Credits/Recognition" actually consist of?

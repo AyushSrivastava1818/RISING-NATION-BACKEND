@@ -54,6 +54,8 @@ model PeopleProfile {
   linkedin_url String?
   photo_url    String?
   featured     Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
 
   user            User?           @relation(fields: [user_id], references: [id], onDelete: SetNull)
   project_members ProjectMember[]
@@ -75,15 +77,17 @@ model Category {
 }
 
 model Course {
-  id             String  @id @default(uuid()) @db.Uuid
+  id             String   @id @default(uuid()) @db.Uuid
   title          String
-  description    String? @db.Text
+  description    String?  @db.Text
   level          String // Beginner | Intermediate | Advanced
-  category_id    String  @db.Uuid
+  category_id    String   @db.Uuid
   content_source String // youtube | native
   content_ref    String // YouTube video/playlist ID or native content reference
   thumbnail_url  String?
-  published      Boolean @default(true)
+  published      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
 
   category Category @relation(fields: [category_id], references: [id], onDelete: Restrict)
 
@@ -101,6 +105,8 @@ model Project {
   result             String?  @db.Text
   status             String // in_progress | completed
   featured           Boolean  @default(false)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
 
   media   ProjectMedia[]
   members ProjectMember[]

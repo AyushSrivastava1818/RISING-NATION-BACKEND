@@ -10,14 +10,17 @@ export const ALL_IDEA_STATUSES: IdeaStatus[] = [
 ];
 
 /**
- * State machine transitions for Ideas per ARCHITECTURE.md §3.7 / DECISIONS_LOG.md OD-3:
- * submitted -> in_review -> evaluated -> credited | shortlisted | in_development
+ * State machine transitions for Ideas per ARCHITECTURE.md §3.7:
+ * submitted -> in_review -> evaluated -> credited | shortlisted
+ * credited -> shortlisted
+ * shortlisted -> in_development
+ * Reopens: in_review -> submitted, evaluated -> in_review
  */
 export const LEGAL_IDEA_TRANSITIONS: Record<IdeaStatus, IdeaStatus[]> = {
   submitted: ['in_review'],
-  in_review: ['evaluated'],
-  evaluated: ['credited', 'shortlisted', 'in_development'],
-  credited: ['shortlisted', 'in_development'],
+  in_review: ['evaluated', 'submitted'],
+  evaluated: ['credited', 'shortlisted', 'in_review'],
+  credited: ['shortlisted'],
   shortlisted: ['in_development'],
   in_development: [],
 };
