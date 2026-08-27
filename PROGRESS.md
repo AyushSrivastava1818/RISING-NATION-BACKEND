@@ -12,3 +12,5 @@
 - [x] observability (structured logging + request_id propagation, health/readiness checks, security hardening pass)
 - [ ] deployment config
 - [ ] frontend pages
+
+See `DECISIONS_LOG.md` → "Deferred Hardening Items (Slice 7 audit)" for known, deliberately-unfixed gaps (CSRF defense-in-depth, Idempotency-Key, pending dependency vulnerabilities).
