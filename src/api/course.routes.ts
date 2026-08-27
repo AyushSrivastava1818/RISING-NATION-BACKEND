@@ -45,7 +45,8 @@ courseRouter.get('/:id', async (req: Request, res: Response, next: NextFunction)
 categoryRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const type = typeof req.query.type === 'string' ? req.query.type : undefined;
-    const categories = await courseService.listCategories(type);
+    const group = typeof req.query.group === 'string' ? req.query.group : undefined;
+    const categories = await courseService.listCategories({ type, group });
     res.status(200).json({ data: categories });
   } catch (err) {
     next(err);

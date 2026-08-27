@@ -6,9 +6,18 @@ import { NotFoundError } from '../utils/errors.js';
 
 export type CategoryRow = Category;
 
-export async function listCategories(type?: string): Promise<CategoryRow[]> {
+export interface ListCategoriesFilter {
+  type?: string;
+  group?: string;
+}
+
+export async function listCategories(filter: ListCategoriesFilter = {}): Promise<CategoryRow[]> {
+  const where: Prisma.CategoryWhereInput = {};
+  if (filter.type) where.type = filter.type;
+  if (filter.group) where.group = filter.group;
+
   return prisma.category.findMany({
-    where: type ? { type } : undefined,
+    where,
     orderBy: { name: 'asc' },
   });
 }
@@ -17,6 +26,18 @@ export async function findCategoryById(id: string): Promise<CategoryRow> {
   const cat = await prisma.category.findUnique({ where: { id } });
   if (!cat) throw new NotFoundError(`Category ${id} not found`);
   return cat;
+}
+
+/**
+ * Looks up service categories (type='service') by slug — used to validate
+ * enquiries.services_requested against the curated category list rather than
+ * accepting user-invented values (DATABASE.md, REQ-BIZ-001).
+ */
+export async function findServiceCategoriesBySlugs(slugs: string[]): Promise<CategoryRow[]> {
+  if (slugs.length === 0) return [];
+  return prisma.category.findMany({
+    where: { type: 'service', slug: { in: slugs } },
+  });
 }
 
 // ─── Course Repository ────────────────────────────────────────────────────────

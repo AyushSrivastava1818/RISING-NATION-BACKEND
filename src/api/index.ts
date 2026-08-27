@@ -9,6 +9,8 @@ import { adminProjectRouter } from './admin-project.routes.js';
 import { peopleRouter } from './people.routes.js';
 import { adminPeopleRouter } from './admin-people.routes.js';
 import { adminGrowthRouter } from './admin-growth.routes.js';
+import { publicEnquiryRouter } from './enquiry.routes.js';
+import { adminEnquiryRouter } from './admin-enquiry.routes.js';
 import { requireAdmin, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const apiRouter = Router();
@@ -34,6 +36,9 @@ apiRouter.use('/categories', categoryRouter);
 // Public showcase routes — no auth
 apiRouter.use('/projects', projectRouter);
 apiRouter.use('/people', peopleRouter);
+
+// Public enquiry routes (POST /enquiries) — same rate limiter as POST /ideas
+apiRouter.use(publicEnquiryRouter);
 
 // Admin routes with shared requireAdmin middleware
 export const adminRouter = Router();
@@ -62,5 +67,8 @@ adminRouter.use('/people', adminPeopleRouter);
 
 // PATCH /admin/users/:id/growth-level — its own route, not folded into people-edit
 adminRouter.use('/users', adminGrowthRouter);
+
+// Admin enquiry routes (GET/PATCH /admin/enquiries)
+adminRouter.use('/enquiries', adminEnquiryRouter);
 
 apiRouter.use('/admin', adminRouter);

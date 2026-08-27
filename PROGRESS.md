@@ -7,7 +7,7 @@
 - [x] learning/courses
 - [x] showcase (projects/people, growth ladder)
 - [ ] opportunities
-- [ ] enquiries
+- [x] enquiries
 - [x] media upload (signed-upload flow: project screenshots, people photos)
 - [ ] observability
 - [ ] deployment config

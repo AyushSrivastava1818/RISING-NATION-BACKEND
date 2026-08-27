@@ -25,8 +25,8 @@ export async function getCourseById(id: string): Promise<CourseWithCategory> {
   return courseRepo.findCourseById(id);
 }
 
-export async function listCategories(type?: string) {
-  return courseRepo.listCategories(type);
+export async function listCategories(filter: courseRepo.ListCategoriesFilter = {}) {
+  return courseRepo.listCategories(filter);
 }
 
 // ─── Admin write paths ────────────────────────────────────────────────────────

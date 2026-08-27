@@ -204,7 +204,7 @@ model Enquiry {
   contact_name       String
   contact_email      String
   contact_phone      String?
-  message            String   @db.Text
+  message            String?  @db.Text
   status             String   @default("new") // new | contacted | closed
   created_at         DateTime @default(now())
 
