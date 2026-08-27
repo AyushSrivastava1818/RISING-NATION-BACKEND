@@ -1,0 +1,275 @@
+name: CI
+
+# Sequence per ENGINEERING.md §6.8:
+#   lint -> [dependency vulnerability scan] -> unit tests -> integration tests
+#     -> migration deploy check -> build container
+#     -> (staging deploy -> smoke test) -> production deploy
+# Each job `needs` the one(s) before it, so a failure anywhere stops the
+# pipeline before the next stage runs — matching "each step gates the next".
+#
+# `staging-deploy`, `smoke-test`, and `production-deploy` only run on pushes
+# to `main` (never on pull requests) and require the secrets described in
+# DEPLOY.md. The actual "push to host" command in both is a placeholder:
+# ENGINEERING.md §6.8 names the hosting provider as unresolved (Open Decision
+# OD-6), so this workflow implements the ordering and gating (migrate before
+# traffic shift, smoke test before production) without inventing a specific
+# provider's deploy API. Replace the placeholder step once OD-6 is resolved.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '22'
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+# Non-secret placeholder values for the "Required: Yes" env vars ENGINEERING.md
+# §6.9 doesn't need a *real* external credential to exercise (S3/YouTube
+# services fall back to stub mode on these exact placeholder strings — see
+# src/services/storage.service.ts / youtube.service.ts). Real secrets for
+# staging/production live in GitHub Environment secrets, never here.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  dependency-audit:
+    name: Dependency vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # ENGINEERING.md §6.1: "npm audit-equivalent in CI, blocking merge".
+      - run: npm audit --audit-level=high
+
+  test:
+    name: Unit + integration tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: risingnation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/risingnation?schema=public
+      SESSION_SECRET: ci-test-session-secret-not-for-real-use
+      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGIN: http://localhost:3000
+      S3_ENDPOINT: https://s3.amazonaws.com
+      S3_BUCKET: risingnation-media
+      S3_ACCESS_KEY_ID: your-s3-access-key-id
+      S3_SECRET_ACCESS_KEY: your-s3-secret-access-key
+      YOUTUBE_API_KEY: your-youtube-api-key
+      EMAIL_PROVIDER_API_KEY: your-email-provider-api-key
+      ADMIN_NOTIFICATION_EMAIL: team@risingnation.org
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      # Excludes tests/migrations.test.ts on purpose — that check is its own
+      # gate below (migration-deploy-check), not folded into this run, per
+      # the Slice 6/7 gap it exists to catch at deploy time.
+      - run: npx vitest run --exclude tests/migrations.test.ts
+
+  migration-deploy-check:
+    name: Migration deploy check (fresh schema)
+    runs-on: ubuntu-latest
+    needs: [test]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: risingnation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/risingnation?schema=public
+      SESSION_SECRET: ci-test-session-secret-not-for-real-use
+      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGIN: http://localhost:3000
+      S3_ENDPOINT: https://s3.amazonaws.com
+      S3_BUCKET: risingnation-media
+      S3_ACCESS_KEY_ID: your-s3-access-key-id
+      S3_SECRET_ACCESS_KEY: your-s3-secret-access-key
+      YOUTUBE_API_KEY: your-youtube-api-key
+      EMAIL_PROVIDER_API_KEY: your-email-provider-api-key
+      ADMIN_NOTIFICATION_EMAIL: team@risingnation.org
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      # tests/migrations.test.ts: deploys every migration from empty into a
+      # disposable schema on this same Postgres instance and asserts success
+      # — the actual fresh-clone/CI bootstrap scenario, not just diff-equality
+      # against an already-migrated database. Named, standalone gate,
+      # positioned before the container build so a migration that passes
+      # locally (already-migrated dev DB) but fails fresh never reaches an
+      # image build, let alone a deploy.
+      - run: npx vitest run tests/migrations.test.ts
+
+  build:
+    name: Build container
+    runs-on: ubuntu-latest
+    needs: [dependency-audit, test, migration-deploy-check]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build (and push on main)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  staging-deploy:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # Deploy order per §6.8: migrate -> deploy -> verify readiness -> shift
+      # traffic. Migration runs here, against the target database, before the
+      # new image receives any traffic.
+      - name: Run migrations against staging database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      - name: Deploy image to staging host
+        run: |
+          echo "TODO(OD-6): hosting provider undecided (ENGINEERING.md §6.9/§6.13)."
+          echo "Replace this step with your provider's deploy command, e.g.:"
+          echo "  - pull/run ${{ env.IMAGE_NAME }}:${{ github.sha }} on the target host, or"
+          echo "  - trigger the provider's container-deploy API/CLI with that image tag."
+          echo "Provider secrets/vars (STAGING_URL, per-provider deploy tokens) must be"
+          echo "added to the 'staging' GitHub Environment before this step does anything real."
+      - name: Verify readiness
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-connrefused \
+            "${{ vars.STAGING_URL }}/api/ready"
+
+  smoke-test:
+    name: Staging smoke test
+    runs-on: ubuntu-latest
+    needs: [staging-deploy]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      # API-level checks only (curl against real HTTP endpoints) — this build
+      # is backend-only, frontend descoped, so there is no browser-based
+      # smoke test here by design.
+      - name: Liveness
+        run: curl --fail --silent --show-error "${{ vars.STAGING_URL }}/api/health"
+      - name: Readiness
+        run: curl --fail --silent --show-error "${{ vars.STAGING_URL }}/api/ready"
+      - name: Public endpoint sanity (unauthenticated GET, paginated list)
+        run: curl --fail --silent --show-error "${{ vars.STAGING_URL }}/api/courses"
+      - name: Admin route rejects unauthenticated access
+        run: |
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            "${{ vars.STAGING_URL }}/api/admin/placeholder")
+          if [ "$status" != "401" ]; then
+            echo "expected 401 from an unauthenticated admin request, got $status"
+            exit 1
+          fi
+
+  production-deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs: [smoke-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Configure required reviewers on the "production" GitHub Environment
+    # (Settings -> Environments) for a manual approval gate before this job
+    # runs — not expressible in workflow YAML itself.
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Run migrations against production database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      - name: Deploy image to production host
+        run: |
+          echo "TODO(OD-6): hosting provider undecided (ENGINEERING.md §6.9/§6.13)."
+          echo "Replace this step with your provider's deploy command for"
+          echo "${{ env.IMAGE_NAME }}:${{ github.sha }} once a provider is chosen."
+      - name: Verify readiness
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-connrefused \
+            "${{ vars.PRODUCTION_URL }}/api/ready"
