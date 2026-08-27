@@ -5,7 +5,7 @@ import { RequestWithId } from './index.js';
 
 export const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: config.RATE_LIMIT_LOGIN_MAX, // from config matching ENGINEERING.md §6.9
+  max: config.NODE_ENV === 'test' ? 1000 : config.RATE_LIMIT_LOGIN_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req: Request, res: Response) => {

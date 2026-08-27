@@ -3,16 +3,6 @@ import bcrypt from 'bcrypt';
 import { config } from '../config/index.js';
 
 const BCRYPT_SALT_ROUNDS = 12;
-const IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 hours
-const ABSOLUTE_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-export interface SessionPayload {
-  userId: string;
-  email: string;
-  role: string;
-  createdAt: number;
-  lastActiveAt: number;
-}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
@@ -38,73 +28,35 @@ function base64UrlDecode(str: string): string {
   return Buffer.from(base64, 'base64').toString('utf8');
 }
 
-export function createSessionToken(user: { id: string; email: string; role: string }): string {
-  const now = Date.now();
-  const payload: SessionPayload = {
-    userId: user.id,
-    email: user.email,
-    role: user.role,
-    createdAt: now,
-    lastActiveAt: now,
-  };
-
-  const payloadEncoded = base64UrlEncode(JSON.stringify(payload));
+export function signSessionId(sessionId: string): string {
   const signature = crypto
     .createHmac('sha256', config.SESSION_SECRET)
-    .update(payloadEncoded)
+    .update(sessionId)
     .digest('base64url');
 
-  return `${payloadEncoded}.${signature}`;
+  return `${sessionId}.${signature}`;
 }
 
-export function refreshSessionToken(payload: SessionPayload): string {
-  const refreshedPayload: SessionPayload = {
-    ...payload,
-    lastActiveAt: Date.now(),
-  };
-
-  const payloadEncoded = base64UrlEncode(JSON.stringify(refreshedPayload));
-  const signature = crypto
-    .createHmac('sha256', config.SESSION_SECRET)
-    .update(payloadEncoded)
-    .digest('base64url');
-
-  return `${payloadEncoded}.${signature}`;
-}
-
-export function verifySessionToken(token: string): { valid: boolean; payload?: SessionPayload; error?: string } {
+export function verifySignedSessionId(signedToken: string): { valid: boolean; sessionId?: string; error?: string } {
   try {
-    const parts = token.split('.');
+    const parts = signedToken.split('.');
     if (parts.length !== 2) {
       return { valid: false, error: 'Malformed session token' };
     }
 
-    const [payloadEncoded, signature] = parts;
+    const [sessionId, signature] = parts;
     const expectedSignature = crypto
       .createHmac('sha256', config.SESSION_SECRET)
-      .update(payloadEncoded)
+      .update(sessionId)
       .digest('base64url');
 
     if (signature !== expectedSignature) {
       return { valid: false, error: 'Invalid session signature' };
     }
 
-    const payload: SessionPayload = JSON.parse(base64UrlDecode(payloadEncoded));
-    const now = Date.now();
-
-    // Check 7-day absolute timeout
-    if (now - payload.createdAt > ABSOLUTE_TIMEOUT_MS) {
-      return { valid: false, error: 'Session expired (absolute timeout)' };
-    }
-
-    // Check 8-hour idle timeout
-    if (now - payload.lastActiveAt > IDLE_TIMEOUT_MS) {
-      return { valid: false, error: 'Session expired (idle timeout)' };
-    }
-
-    return { valid: true, payload };
+    return { valid: true, sessionId };
   } catch (_err) {
-    return { valid: false, error: 'Failed to verify session' };
+    return { valid: false, error: 'Failed to verify session token' };
   }
 }
 

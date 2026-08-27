@@ -1,5 +1,5 @@
 // Prisma Schema — Rising Nation Platform (MVP Schema)
-// Matches DATABASE.md Entity Specification for MVP entities only
+// Matches DATABASE.md Entity Specification + Server-side Sessions per ARCHITECTURE.md §3.6
 
 generator client {
   provider = "prisma-client-js"
@@ -25,8 +25,23 @@ model User {
   reviewed_ideas      Idea[]              @relation("IdeaReviewedBy")
   idea_status_changes IdeaStatusHistory[] @relation("IdeaStatusChangedBy")
   enquiries           Enquiry[]
+  sessions            Session[]
 
   @@map("users")
+}
+
+model Session {
+  id             String   @id @default(uuid()) @db.Uuid
+  user_id        String   @db.Uuid
+  created_at     DateTime @default(now())
+  expires_at     DateTime
+  last_active_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at])
+  @@map("sessions")
 }
 
 model PeopleProfile {

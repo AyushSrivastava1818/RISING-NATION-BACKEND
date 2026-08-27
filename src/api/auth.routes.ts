@@ -50,18 +50,25 @@ authRouter.post('/login', loginRateLimiter, async (req, res, next) => {
 });
 
 // POST /auth/logout
-authRouter.post('/logout', authenticate, (_req: AuthenticatedRequest, res: Response) => {
-  res.cookie(SESSION_COOKIE_NAME, '', {
-    httpOnly: true,
-    path: '/',
-    expires: new Date(0),
-    maxAge: 0,
-  });
-  res.status(200).json({
-    data: {
-      message: 'Logged out successfully',
-    },
-  });
+authRouter.post('/logout', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    if (req.session?.id) {
+      await authService.logout(req.session.id);
+    }
+    res.cookie(SESSION_COOKIE_NAME, '', {
+      httpOnly: true,
+      path: '/',
+      expires: new Date(0),
+      maxAge: 0,
+    });
+    res.status(200).json({
+      data: {
+        message: 'Logged out successfully',
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /auth/me

@@ -1,8 +1,9 @@
 import { UserRepository, userRepository } from '../repositories/user.repository.js';
+import { SessionRepository, sessionRepository } from '../repositories/session.repository.js';
 import {
   hashPassword,
   verifyPassword,
-  createSessionToken,
+  signSessionId,
   createPasswordResetToken,
   verifyPasswordResetToken,
 } from '../utils/crypto.js';
@@ -27,7 +28,10 @@ export interface LoginResult {
 }
 
 export class AuthService {
-  constructor(private userRepo: UserRepository = userRepository) {}
+  constructor(
+    private userRepo: UserRepository = userRepository,
+    private sessionRepo: SessionRepository = sessionRepository
+  ) {}
 
   async login(email: string, password: string): Promise<LoginResult> {
     if (!email || !password) {
@@ -49,11 +53,15 @@ export class AuthService {
       throw new UnauthenticatedError('Admin login access required');
     }
 
-    const sessionToken = createSessionToken({
-      id: user.id,
-      email: user.email,
-      role: user.role,
+    // 7-day absolute expiration
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const session = await this.sessionRepo.createSession({
+      userId: user.id,
+      expiresAt,
+      lastActiveAt: new Date(),
     });
+
+    const sessionToken = signSessionId(session.id);
 
     return {
       user: {
@@ -66,6 +74,12 @@ export class AuthService {
       },
       sessionToken,
     };
+  }
+
+  async logout(sessionId: string): Promise<void> {
+    if (sessionId) {
+      await this.sessionRepo.deleteSession(sessionId);
+    }
   }
 
   async getMe(userId: string): Promise<UserDto> {
@@ -112,7 +126,6 @@ export class AuthService {
       throw new ValidationError('Password must be at least 12 characters');
     }
 
-    // Token verification requires decoding user ID first
     const parts = token.split('.');
     if (parts.length !== 2) {
       throw new ValidationError('Invalid reset token');
@@ -141,6 +154,9 @@ export class AuthService {
 
     const newHash = await hashPassword(newPassword);
     await this.userRepo.updatePassword(user.id, newHash);
+
+    // Invalidate all active sessions for this user on password reset
+    await this.sessionRepo.deleteAllSessionsForUser(user.id);
 
     return { success: true };
   }
