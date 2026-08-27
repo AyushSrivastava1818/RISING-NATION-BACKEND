@@ -3,7 +3,7 @@
 - [x] scaffold
 - [x] schema/migrations
 - [x] auth
-- [ ] idea pipeline
+- [x] idea pipeline
 - [ ] learning/courses
 - [ ] showcase (projects/people)
 - [ ] opportunities

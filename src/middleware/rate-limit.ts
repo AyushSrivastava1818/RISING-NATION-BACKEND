@@ -19,3 +19,20 @@ export const loginRateLimiter = rateLimit({
     });
   },
 });
+
+export const publicSubmissionRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: config.NODE_ENV === 'test' ? 1000 : config.RATE_LIMIT_PUBLIC_SUBMISSION_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => {
+    const requestId = (req as RequestWithId).requestId;
+    res.status(429).json({
+      error: {
+        code: 'rate_limited',
+        message: 'Too many submissions, please try again later',
+        request_id: requestId,
+      },
+    });
+  },
+});

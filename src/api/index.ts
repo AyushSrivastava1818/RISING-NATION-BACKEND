@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { authRouter } from './auth.routes.js';
+import { publicIdeaRouter } from './idea.routes.js';
+import { adminIdeaRouter } from './admin-idea.routes.js';
 import { requireAdmin, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const apiRouter = Router();
@@ -12,8 +14,11 @@ apiRouter.get('/ready', (_req, res) => {
   res.status(200).json({ status: 'ready' });
 });
 
-// Mount /auth routes
+// Auth routes
 apiRouter.use('/auth', authRouter);
+
+// Public idea routes (POST /ideas)
+apiRouter.use(publicIdeaRouter);
 
 // Admin routes with shared requireAdmin middleware
 export const adminRouter = Router();
@@ -27,5 +32,8 @@ adminRouter.get('/placeholder', (req: AuthenticatedRequest, res) => {
     },
   });
 });
+
+// Admin idea routes (GET/PATCH /admin/ideas)
+adminRouter.use('/ideas', adminIdeaRouter);
 
 apiRouter.use('/admin', adminRouter);

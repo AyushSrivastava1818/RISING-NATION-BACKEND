@@ -19,10 +19,10 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  if (err instanceof AppError) {
-    res.status(err.statusCode).json({
+  if (err instanceof AppError || (err.statusCode && err.statusCode < 500)) {
+    res.status(err.statusCode || 400).json({
       error: {
-        code: err.code,
+        code: err.code || 'error',
         message: err.message,
         request_id: req.requestId,
       },
