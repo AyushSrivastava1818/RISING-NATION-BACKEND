@@ -1,7 +1,7 @@
 # Build Progress — Rising Nation
 
 - [x] scaffold
-- [ ] schema/migrations
+- [x] schema/migrations
 - [ ] auth
 - [ ] idea pipeline
 - [ ] learning/courses
