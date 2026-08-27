@@ -14,6 +14,8 @@ All MVP backend work per `ENGINEERING.md` §6.11 is complete: auth, the idea-sub
 
 Every non-obvious call made during this build — resolved Open Decisions (OD-1 through OD-11), schema deviations from `docs/DATABASE.md`'s original spec, deliberately deferred hardening items, tooling-scope choices, and the backend-only delivery scope itself — is recorded in [`DECISIONS_LOG.md`](DECISIONS_LOG.md), with the reasoning, not just the outcome. Read it before assuming something in the code is arbitrary; it usually traces back to a specific requirement, spec gap, or tradeoff recorded there.
 
+The log is audited, not just written once and trusted: a handoff pass cross-checked every existing `SCHEMA-DEVIATION` entry against the current `docs/DATABASE.md` and `schema.prisma` rather than taking the log at face value, found three that were factually wrong, and — for `users.password_hash` specifically — traced whether the nullable column it flagged was protecting a real feature or just looser than it needed to be. It was the latter: no code path anywhere creates a user without a password, so it's now `NOT NULL` (migration `20260828160000_users_password_hash_not_null_per_database_md`), matching `DATABASE.md`'s spec. See `DECISIONS_LOG.md`'s "Schema Deviations" section for the full investigation.
+
 ## Running things locally
 
 ```bash

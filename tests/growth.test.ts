@@ -179,6 +179,7 @@ describe('Growth Ladder Test Suite — ARCHITECTURE.md §3.5/§3.8, API.md PATCH
           email: 'growth-tx-target@risingnation.org',
           role: 'member',
           growth_level: 'learner',
+          password_hash: 'test-fixture-hash-not-a-real-bcrypt-hash',
         },
       });
 
@@ -206,7 +207,12 @@ describe('Growth Ladder Test Suite — ARCHITECTURE.md §3.5/§3.8, API.md PATCH
       const actor = await prisma.user.upsert({
         where: { email: 'growth-tx-actor@risingnation.org' },
         update: {},
-        create: { name: 'Growth Tx Actor', email: 'growth-tx-actor@risingnation.org', role: 'admin' },
+        create: {
+          name: 'Growth Tx Actor',
+          email: 'growth-tx-actor@risingnation.org',
+          role: 'admin',
+          password_hash: 'test-fixture-hash-not-a-real-bcrypt-hash',
+        },
       });
       const target = await prisma.user.upsert({
         where: { email: 'growth-tx-target-2@risingnation.org' },
@@ -216,6 +222,7 @@ describe('Growth Ladder Test Suite — ARCHITECTURE.md §3.5/§3.8, API.md PATCH
           email: 'growth-tx-target-2@risingnation.org',
           role: 'member',
           growth_level: 'learner',
+          password_hash: 'test-fixture-hash-not-a-real-bcrypt-hash',
         },
       });
 

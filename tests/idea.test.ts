@@ -494,6 +494,7 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
           name: 'Tx Admin',
           email: 'tx-admin@risingnation.org',
           role: 'admin',
+          password_hash: 'test-fixture-hash-not-a-real-bcrypt-hash',
         },
       });
 

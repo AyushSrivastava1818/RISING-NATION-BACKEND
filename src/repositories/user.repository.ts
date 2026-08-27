@@ -4,7 +4,7 @@ import { prisma } from './prisma.js';
 export interface CreateUserData {
   name: string;
   email: string;
-  password_hash?: string;
+  password_hash: string;
   role?: string;
   growth_level?: string;
 }
