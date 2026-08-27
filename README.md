@@ -28,9 +28,10 @@ Full rationale for each choice is in [`DECISIONS_LOG.md`](DECISIONS_LOG.md).
 | Showcase (Projects & People) | ✅ | `GET /projects(/:id)`, `GET /people(/:id)`, `/admin/projects`, `/admin/people` CRUD + signed media/photo upload |
 | Growth ladder | ✅ | `PATCH /admin/users/:id/growth-level` (audited, no self-promotion) |
 | Service intake (Enquiries) | ✅ | `POST /enquiries`, `GET/PATCH /admin/enquiries` |
-| Observability & security hardening | ✅ | structured logging, `request_id` propagation, `/health` + `/ready`, threat-model audit |
-| Opportunities | ⏳ not yet built | |
-| Deployment config / Frontend | ⏳ not yet built | |
+| Observability & security hardening | ✅ | structured logging, `request_id` propagation, `/api/health` + `/api/ready`, threat-model audit |
+| Deployment config | ✅ | Dockerfile, fail-fast env validation, CI pipeline — see [`DEPLOY.md`](DEPLOY.md) |
+| Opportunities | ⏳ Post-MVP, not yet built | |
+| Frontend | ⏳ out of scope for this repo — see [`DECISIONS_LOG.md`](DECISIONS_LOG.md) → "Delivery Scope: Backend-Only" | |
 
 See [`PROGRESS.md`](PROGRESS.md) for the live build checklist and [`DECISIONS_LOG.md`](DECISIONS_LOG.md) for schema deviations, open decisions, and deliberately deferred hardening items.
 
@@ -87,18 +88,20 @@ npm run prisma:validate
 
 | Doc | Covers |
 |---|---|
+| [`HANDOFF.md`](HANDOFF.md) | Start here for team pickup — what's built, how to run/test/deploy, what's deferred |
 | [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Source functional spec, requirement IDs |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layering, request lifecycle, domain design, transactions |
 | [`docs/DATABASE.md`](docs/DATABASE.md) | Entity specification, indexing, data integrity |
 | [`docs/API.md`](docs/API.md) | Endpoint-by-endpoint contract |
 | [`docs/ENGINEERING.md`](docs/ENGINEERING.md) | Security, validation, error handling, observability, deployment |
 | [`DECISIONS_LOG.md`](DECISIONS_LOG.md) | Resolved open decisions, schema deviations, deferred hardening items |
+| [`DEPLOY.md`](DEPLOY.md) | Docker image, CI/CD pipeline, migration-before-deploy ordering |
 | [`PROGRESS.md`](PROGRESS.md) | Build checklist |
 
 ## Security & observability
 
 - Every error response is `{ error: { code, message, request_id } }` with the status/code pairing fixed by `docs/ENGINEERING.md` §6.3 — enforced by a single error-handling middleware, not per-route.
 - Every request gets a `request_id`, propagated via `AsyncLocalStorage` into every structured log line for that request (no manual threading through function calls).
-- `GET /health` (liveness) and `GET /ready` (readiness — verifies the database connection is acquirable) are separated per §6.5.
+- `GET /api/health` (liveness) and `GET /api/ready` (readiness — verifies the database connection is acquirable) are separated per §6.5.
 - Rate limiting on login and all public submission endpoints; admin authorization is checked in middleware before any resource lookup (`403`, never `404`, on a role mismatch).
 - Signed-upload flow for all media (project screenshots, people photos): backend-validated MIME/size, backend-generated object keys, confirm-before-persist.
