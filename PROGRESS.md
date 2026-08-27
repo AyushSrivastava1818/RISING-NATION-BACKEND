@@ -4,7 +4,7 @@
 - [x] schema/migrations
 - [x] auth
 - [x] idea pipeline
-- [ ] learning/courses
+- [x] learning/courses
 - [ ] showcase (projects/people)
 - [ ] opportunities
 - [ ] enquiries

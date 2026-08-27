@@ -53,3 +53,9 @@ export class RateLimitedError extends AppError {
     super(429, 'rate_limited', message);
   }
 }
+
+export class UpstreamError extends AppError {
+  constructor(message: string = 'Upstream service error') {
+    super(502, 'upstream_error', message);
+  }
+}

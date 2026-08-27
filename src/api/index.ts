@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { authRouter } from './auth.routes.js';
 import { publicIdeaRouter } from './idea.routes.js';
 import { adminIdeaRouter } from './admin-idea.routes.js';
+import { courseRouter, categoryRouter } from './course.routes.js';
+import { adminCourseRouter } from './admin-course.routes.js';
 import { requireAdmin, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const apiRouter = Router();
@@ -20,6 +22,10 @@ apiRouter.use('/auth', authRouter);
 // Public idea routes (POST /ideas)
 apiRouter.use(publicIdeaRouter);
 
+// Public learning routes — no auth, zero runtime YouTube dependency
+apiRouter.use('/courses', courseRouter);
+apiRouter.use('/categories', categoryRouter);
+
 // Admin routes with shared requireAdmin middleware
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
@@ -35,5 +41,8 @@ adminRouter.get('/placeholder', (req: AuthenticatedRequest, res) => {
 
 // Admin idea routes (GET/PATCH /admin/ideas)
 adminRouter.use('/ideas', adminIdeaRouter);
+
+// Admin course routes (POST/PATCH/DELETE /admin/courses)
+adminRouter.use('/courses', adminCourseRouter);
 
 apiRouter.use('/admin', adminRouter);
