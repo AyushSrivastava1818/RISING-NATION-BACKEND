@@ -22,8 +22,7 @@ model User {
 
   people_profile      PeopleProfile?
   submitted_ideas     Idea[]              @relation("IdeaSubmittedBy")
-  reviewed_ideas      Idea[]              @relation("IdeaReviewedBy")
-  idea_status_changes IdeaStatusHistory[] @relation("IdeaStatusChangedBy")
+  idea_status_changes IdeaStatusHistory[] @relation("IdeaStatusActor")
   enquiries           Enquiry[]
   sessions            Session[]
 
@@ -160,14 +159,11 @@ model Idea {
   contact_email        String
   contact_phone        String?
   status               String   @default("submitted") // submitted | in_review | evaluated | credited | shortlisted | in_development
-  admin_notes          String?  @db.Text
-  reviewed_by          String?  @db.Uuid
   version              Int      @default(1) // Optimistic locking
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
 
   submitter      User?               @relation("IdeaSubmittedBy", fields: [submitted_by], references: [id], onDelete: SetNull)
-  reviewer       User?               @relation("IdeaReviewedBy", fields: [reviewed_by], references: [id], onDelete: SetNull)
   status_history IdeaStatusHistory[]
 
   @@index([status])
@@ -179,12 +175,12 @@ model IdeaStatusHistory {
   idea_id     String   @db.Uuid
   from_status String?
   to_status   String
-  changed_by  String?  @db.Uuid
+  actor_id    String?  @db.Uuid
   notes       String?  @db.Text
   created_at  DateTime @default(now())
 
   idea  Idea  @relation(fields: [idea_id], references: [id], onDelete: Cascade)
-  actor User? @relation("IdeaStatusChangedBy", fields: [changed_by], references: [id], onDelete: SetNull)
+  actor User? @relation("IdeaStatusActor", fields: [actor_id], references: [id], onDelete: SetNull)
 
   @@index([idea_id])
   @@map("ideas_status_history")

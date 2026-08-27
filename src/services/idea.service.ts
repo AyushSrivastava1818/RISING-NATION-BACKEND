@@ -93,8 +93,8 @@ export class IdeaService {
       id: input.id,
       expectedVersion: input.version,
       toStatus: targetStatus,
-      adminNotes: input.admin_notes,
-      changedBy: input.adminId,
+      notes: input.admin_notes,
+      actorId: input.adminId,
     });
   }
 }

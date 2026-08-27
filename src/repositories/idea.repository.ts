@@ -24,7 +24,10 @@ export interface ListIdeasFilter {
 }
 
 export type IdeaWithHistory = Idea & {
-  status_history: IdeaStatusHistory[];
+  status_history: (IdeaStatusHistory & {
+    actor?: { id: string; name: string; email: string } | null;
+  })[];
+  submitter?: { id: string; name: string; email: string } | null;
 };
 
 export class IdeaRepository {
@@ -64,9 +67,6 @@ export class IdeaRepository {
         submitter: {
           select: { id: true, name: true, email: true },
         },
-        reviewer: {
-          select: { id: true, name: true, email: true },
-        },
       },
     }) as Promise<IdeaWithHistory | null>;
   }
@@ -98,13 +98,14 @@ export class IdeaRepository {
    * Atomic Transaction Requirement (ARCHITECTURE.md §3.8):
    * Status UPDATE and ideas_status_history INSERT must happen atomically in one transaction.
    * Optimistic lock on idea.version prevents race conditions.
+   * Audit trail (actor_id, notes) lives solely in ideas_status_history per DATABASE.md.
    */
   async updateStatusWithHistory(params: {
     id: string;
     expectedVersion: number;
     toStatus: string;
-    adminNotes?: string;
-    changedBy: string;
+    notes?: string;
+    actorId: string;
   }): Promise<IdeaWithHistory> {
     return prisma.$transaction(async (tx) => {
       // 1. Fetch current idea inside transaction
@@ -127,16 +128,14 @@ export class IdeaRepository {
       const fromStatus = current.status;
       const nextVersion = current.version + 1;
 
-      // 3. Update Idea
-      const updatedIdea = await tx.idea.update({
+      // 3. Update Idea (status and optimistic lock version only)
+      await tx.idea.update({
         where: {
           id: params.id,
           version: params.expectedVersion, // Double lock check at SQL level
         },
         data: {
           status: params.toStatus,
-          admin_notes: params.adminNotes !== undefined ? params.adminNotes : current.admin_notes,
-          reviewed_by: params.changedBy,
           version: nextVersion,
         },
       });
@@ -147,17 +146,25 @@ export class IdeaRepository {
           idea_id: params.id,
           from_status: fromStatus,
           to_status: params.toStatus,
-          changed_by: params.changedBy,
-          notes: params.adminNotes || null,
+          actor_id: params.actorId,
+          notes: params.notes || null,
         },
       });
 
-      // 5. Return updated idea with history
+      // 5. Return updated idea with status history and actor info
       const result = await tx.idea.findUnique({
         where: { id: params.id },
         include: {
           status_history: {
             orderBy: { created_at: 'asc' },
+            include: {
+              actor: {
+                select: { id: true, name: true, email: true },
+              },
+            },
+          },
+          submitter: {
+            select: { id: true, name: true, email: true },
           },
         },
       });

@@ -85,8 +85,6 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
         ...data,
         status: 'submitted',
         version: 1,
-        admin_notes: null,
-        reviewed_by: null,
         created_at: new Date(),
         updated_at: new Date(),
       };
@@ -125,8 +123,6 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
       const fromStatus = current.status;
       current.status = params.toStatus;
       current.version += 1;
-      current.admin_notes = params.adminNotes !== undefined ? params.adminNotes : current.admin_notes;
-      current.reviewed_by = params.changedBy;
       current.updated_at = new Date();
       mockIdeasStore.set(params.id, current);
 
@@ -135,8 +131,8 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
         idea_id: params.id,
         from_status: fromStatus,
         to_status: params.toStatus,
-        changed_by: params.changedBy,
-        notes: params.adminNotes || null,
+        actor_id: params.actorId,
+        notes: params.notes || null,
         created_at: new Date(),
       };
       mockHistoryStore.push(historyEntry);
@@ -278,6 +274,7 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
       expect(res.body.data.status_history[0].from_status).toBe('submitted');
       expect(res.body.data.status_history[0].to_status).toBe('in_review');
       expect(res.body.data.status_history[0].notes).toBe('Beginning evaluation process');
+      expect(res.body.data.status_history[0].actor_id).toBe(mockAdminUser.id);
     });
 
     it('rejects illegal transition with 409 conflict and returns current idea state', async () => {
@@ -398,11 +395,11 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
         },
       });
 
-      // 3. Call updateStatusWithHistory with an invalid changedBy foreign key
+      // 3. Call updateStatusWithHistory with an invalid actorId foreign key
       //    (a non-existent user UUID).
       //    In PostgreSQL, the UPDATE to 'ideas' succeeds first inside the transaction,
       //    but the subsequent INSERT to 'ideas_status_history' fails the FOREIGN KEY
-      //    constraint on changed_by -> users(id).
+      //    constraint on actor_id -> users(id).
       const nonExistentUserId = '00000000-0000-0000-0000-000000000999';
 
       await expect(
@@ -410,8 +407,8 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
           id: realIdea.id,
           expectedVersion: 1,
           toStatus: 'in_review',
-          adminNotes: 'This should be rolled back completely',
-          changedBy: nonExistentUserId,
+          notes: 'This should be rolled back completely',
+          actorId: nonExistentUserId,
         })
       ).rejects.toThrow();
 
@@ -424,8 +421,6 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
       expect(ideaAfterRollback).not.toBeNull();
       expect(ideaAfterRollback!.status).toBe('submitted');
       expect(ideaAfterRollback!.version).toBe(1);
-      expect(ideaAfterRollback!.admin_notes).toBeNull();
-      expect(ideaAfterRollback!.reviewed_by).toBeNull();
 
       // 5. Query ideas_status_history in Postgres for this idea_id
       const historyRows = await prisma.ideaStatusHistory.findMany({
