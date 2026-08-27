@@ -9,9 +9,18 @@
  * The client's declared filename is never used as the storage path — the
  * object_key is backend-generated (UUID-based) to prevent path traversal and
  * avoid persisting original filenames.
+ *
+ * Signing uses the official AWS SDK (@aws-sdk/client-s3 +
+ * @aws-sdk/s3-request-presigner) rather than hand-rolled SigV4 — there is no
+ * bundle-size or environment constraint here (this is a Node backend, not a
+ * size-constrained bundle), so hand-rolling request signing has no upside and
+ * a real downside: it's exactly the kind of security-sensitive, easy-to-get-
+ * subtly-wrong logic you don't want hand-maintained.
  */
 
 import crypto from 'crypto';
+import { S3Client, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '../config/index.js';
 import { ValidationError, UpstreamError } from '../utils/errors.js';
 
@@ -56,6 +65,23 @@ export function publicUrlFor(objectKey: string): string {
   return `${config.S3_ENDPOINT}/${config.S3_BUCKET}/${objectKey}`;
 }
 
+let s3Client: S3Client | null = null;
+
+function getS3Client(): S3Client {
+  if (!s3Client) {
+    s3Client = new S3Client({
+      region: config.S3_REGION,
+      endpoint: config.S3_ENDPOINT,
+      forcePathStyle: true, // S3-compatible custom endpoints (e.g. MinIO) need path-style addressing
+      credentials: {
+        accessKeyId: config.S3_ACCESS_KEY_ID,
+        secretAccessKey: config.S3_SECRET_ACCESS_KEY,
+      },
+    });
+  }
+  return s3Client;
+}
+
 /**
  * Validates the request (mime/size allowlist — backend-side enforcement; the
  * bucket policy is the real enforcement per §6.4) and issues a signed PUT URL.
@@ -76,7 +102,14 @@ export async function createSignedUploadUrl(input: SignedUploadRequest): Promise
     };
   }
 
-  return { upload_url: signS3PutUrl(object_key, input.mime_type), object_key };
+  const command = new PutObjectCommand({
+    Bucket: config.S3_BUCKET,
+    Key: object_key,
+    ContentType: input.mime_type,
+  });
+  const upload_url = await getSignedUrl(getS3Client(), command, { expiresIn: UPLOAD_URL_TTL_SECONDS });
+
+  return { upload_url, object_key };
 }
 
 /**
@@ -89,84 +122,14 @@ export async function verifyObjectExists(objectKey: string): Promise<boolean> {
   }
 
   try {
-    const response = await fetch(publicUrlFor(objectKey), {
-      method: 'HEAD',
-      signal: AbortSignal.timeout(5000),
-    });
-    return response.ok;
-  } catch (err) {
+    await getS3Client().send(new HeadObjectCommand({ Bucket: config.S3_BUCKET, Key: objectKey }));
+    return true;
+  } catch (err: any) {
+    if (err?.$metadata?.httpStatusCode === 404 || err?.name === 'NotFound') {
+      return false;
+    }
     throw new UpstreamError(
       `Object storage unreachable while confirming upload: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
-}
-
-// ─── AWS SigV4 presigned PUT (S3-compatible, path-style) — no SDK dependency ──
-
-function hmac(key: Buffer | string, data: string): Buffer {
-  return crypto.createHmac('sha256', key).update(data, 'utf8').digest();
-}
-
-function sha256Hex(data: string): string {
-  return crypto.createHash('sha256').update(data, 'utf8').digest('hex');
-}
-
-function signingKey(secret: string, date: string, region: string, service: string): Buffer {
-  const kDate = hmac(`AWS4${secret}`, date);
-  const kRegion = hmac(kDate, region);
-  const kService = hmac(kRegion, service);
-  return hmac(kService, 'aws4_request');
-}
-
-function signS3PutUrl(objectKey: string, _contentType: string): string {
-  const accessKey = config.S3_ACCESS_KEY_ID;
-  const secretKey = config.S3_SECRET_ACCESS_KEY;
-  const region = config.S3_REGION;
-  const service = 's3';
-
-  const endpointUrl = new URL(config.S3_ENDPOINT);
-  const host = endpointUrl.host;
-
-  const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, ''); // YYYYMMDDTHHMMSSZ
-  const dateStamp = amzDate.slice(0, 8);
-  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-
-  const canonicalUri = `/${config.S3_BUCKET}/${objectKey}`;
-
-  const queryParams: Record<string, string> = {
-    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
-    'X-Amz-Credential': `${accessKey}/${credentialScope}`,
-    'X-Amz-Date': amzDate,
-    'X-Amz-Expires': String(UPLOAD_URL_TTL_SECONDS),
-    'X-Amz-SignedHeaders': 'host',
-  };
-  const canonicalQueryString = Object.keys(queryParams)
-    .sort()
-    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
-    .join('&');
-
-  const canonicalHeaders = `host:${host}\n`;
-  const signedHeaders = 'host';
-  const payloadHash = 'UNSIGNED-PAYLOAD';
-
-  const canonicalRequest = [
-    'PUT',
-    canonicalUri,
-    canonicalQueryString,
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash,
-  ].join('\n');
-
-  const stringToSign = [
-    'AWS4-HMAC-SHA256',
-    amzDate,
-    credentialScope,
-    sha256Hex(canonicalRequest),
-  ].join('\n');
-
-  const signature = hmac(signingKey(secretKey, dateStamp, region, service), stringToSign).toString('hex');
-
-  return `${endpointUrl.protocol}//${host}${canonicalUri}?${canonicalQueryString}&X-Amz-Signature=${signature}`;
 }
