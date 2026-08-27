@@ -82,7 +82,8 @@ export class IdeaService {
       const isLegal = isLegalIdeaTransition(current.status as IdeaStatus, targetStatus);
       if (!isLegal) {
         throw new ConflictError(
-          `Illegal status transition from '${current.status}' to '${targetStatus}'.`
+          `Illegal status transition from '${current.status}' to '${targetStatus}'.`,
+          current
         );
       }
     }

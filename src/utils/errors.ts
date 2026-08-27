@@ -1,18 +1,20 @@
 export class AppError extends Error {
   public statusCode: number;
   public code: string;
+  public data?: any;
 
-  constructor(statusCode: number, code: string, message: string) {
+  constructor(statusCode: number, code: string, message: string, data?: any) {
     super(message);
     this.name = 'AppError';
     this.statusCode = statusCode;
     this.code = code;
+    this.data = data;
   }
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string = 'Validation failed') {
-    super(400, 'validation_error', message);
+  constructor(message: string = 'Validation failed', data?: any) {
+    super(400, 'validation_error', message, data);
   }
 }
 
@@ -35,14 +37,14 @@ export class NotFoundError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string = 'Conflict') {
-    super(409, 'conflict', message);
+  constructor(message: string = 'Conflict', data?: any) {
+    super(409, 'conflict', message, data);
   }
 }
 
 export class UnprocessableError extends AppError {
-  constructor(message: string = 'Unprocessable entity') {
-    super(422, 'unprocessable', message);
+  constructor(message: string = 'Unprocessable entity', data?: any) {
+    super(422, 'unprocessable', message, data);
   }
 }
 

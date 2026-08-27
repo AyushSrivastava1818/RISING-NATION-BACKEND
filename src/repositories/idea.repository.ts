@@ -119,7 +119,8 @@ export class IdeaRepository {
       // 2. Optimistic locking verification (DATABASE.md Data Integrity)
       if (current.version !== params.expectedVersion) {
         throw new ConflictError(
-          `Stale version: idea has version ${current.version}, but version ${params.expectedVersion} was supplied. Please reload and retry.`
+          `Stale version: idea has version ${current.version}, but version ${params.expectedVersion} was supplied. Please reload and retry.`,
+          current
         );
       }
 

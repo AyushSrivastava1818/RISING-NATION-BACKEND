@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
-import { ideaRepository, IdeaWithHistory } from '../src/repositories/idea.repository.js';
+import { ideaRepository } from '../src/repositories/idea.repository.js';
 import { sessionRepository, SessionWithUser } from '../src/repositories/session.repository.js';
 import { notificationService } from '../src/services/notification.service.js';
 import { signSessionId } from '../src/utils/crypto.js';
@@ -77,7 +77,7 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
     adminSessionCookie = `rn_session=${signSessionId(adminSessionId)}`;
     memberSessionCookie = `rn_session=${signSessionId(memberSessionId)}`;
 
-    // Mock IdeaRepository
+    // Mock IdeaRepository for HTTP API unit tests
     vi.spyOn(ideaRepository, 'create').mockImplementation(async (data) => {
       const id = `idea_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const idea = {
@@ -117,7 +117,8 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
       if (!current) throw new Error('Idea not found');
       if (current.version !== params.expectedVersion) {
         throw new ConflictError(
-          `Stale version: idea has version ${current.version}, but version ${params.expectedVersion} was supplied.`
+          `Stale version: idea has version ${current.version}, but version ${params.expectedVersion} was supplied.`,
+          current
         );
       }
 
@@ -145,6 +146,10 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
         status_history: mockHistoryStore.filter((h) => h.idea_id === params.id),
       };
     });
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
   });
 
   describe('POST /api/ideas (Public Submission)', () => {
@@ -275,7 +280,7 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
       expect(res.body.data.status_history[0].notes).toBe('Beginning evaluation process');
     });
 
-    it('rejects illegal transition with 409 conflict', async () => {
+    it('rejects illegal transition with 409 conflict and returns current idea state', async () => {
       const res = await request(app)
         .patch(`/api/admin/ideas/${testIdeaId}`)
         .set('Cookie', adminSessionCookie)
@@ -287,17 +292,24 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('conflict');
       expect(res.body.error.message).toContain('Illegal status transition');
+      expect(res.body.data).toBeDefined();
+      expect(res.body.data.id).toBe(testIdeaId);
+      expect(res.body.data.status).toBe('submitted');
+      expect(res.body.data.version).toBe(1);
     });
 
-    it('rejects stale version with 409 conflict', async () => {
+    it('rejects stale version with 409 conflict and returns current idea state in response body', async () => {
       // First update moves version from 1 to 2
-      await request(app)
+      const firstUpdateRes = await request(app)
         .patch(`/api/admin/ideas/${testIdeaId}`)
         .set('Cookie', adminSessionCookie)
         .send({
           version: 1,
           status: 'in_review',
         });
+      expect(firstUpdateRes.status).toBe(200);
+      expect(firstUpdateRes.body.data.version).toBe(2);
+      expect(firstUpdateRes.body.data.status).toBe('in_review');
 
       // Second request sends stale version 1 instead of 2
       const staleRes = await request(app)
@@ -311,6 +323,12 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
       expect(staleRes.status).toBe(409);
       expect(staleRes.body.error.code).toBe('conflict');
       expect(staleRes.body.error.message).toContain('Stale version');
+
+      // Assert response body contains current idea state per API contract
+      expect(staleRes.body.data).toBeDefined();
+      expect(staleRes.body.data.id).toBe(testIdeaId);
+      expect(staleRes.body.data.status).toBe('in_review');
+      expect(staleRes.body.data.version).toBe(2);
     });
 
     it('rejects missing version with 400 validation error', async () => {
@@ -349,53 +367,77 @@ describe('Idea Pipeline (Slice 3) Test Suite', () => {
     });
   });
 
-  describe('Integration Test: Atomic Transaction Rollback on Mid-Transaction Failure', () => {
-    it('rolls back both idea update and history insert if history insert fails', async () => {
-      // Restore real repository implementation for the transaction test
+  describe('Integration Test: Real PostgreSQL Transaction Rollback (ENGINEERING.md §6.6)', () => {
+    it('rolls back both idea status update and history insert when a mid-transaction constraint failure occurs in the real database', async () => {
+      // Restore real repository and prisma methods to execute against the real database
       vi.restoreAllMocks();
 
-      const createdIdea = {
-        id: 'test-idea-tx-1',
-        title: 'Tx Test',
-        problem: 'Prob',
-        proposed_solution: 'Sol',
-        target_users: 'Users',
-        why_it_matters: 'Matters',
-        current_stage: 'Stage',
-        contact_email: 'test@example.com',
-        status: 'submitted',
-        version: 1,
-        admin_notes: null,
-      };
-
-      // Mock prisma transaction to simulate a failure on history creation
-      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
-        const fakeTx = {
-          idea: {
-            findUnique: vi.fn().mockResolvedValue(createdIdea),
-            update: vi.fn().mockResolvedValue({
-              ...createdIdea,
-              status: 'in_review',
-              version: 2,
-            }),
-          },
-          ideaStatusHistory: {
-            create: vi.fn().mockRejectedValue(new Error('Simulated DB network failure during history insert')),
-          },
-        };
-
-        // Running callback will throw when ideaStatusHistory.create fails
-        return callback(fakeTx);
+      // 1. Create a real user in the database to be the initial creator
+      const testAdmin = await prisma.user.upsert({
+        where: { email: 'tx-admin@risingnation.org' },
+        update: {},
+        create: {
+          name: 'Tx Admin',
+          email: 'tx-admin@risingnation.org',
+          role: 'admin',
+        },
       });
+
+      // 2. Create a real idea row in Postgres at version 1, status 'submitted'
+      const realIdea = await prisma.idea.create({
+        data: {
+          title: 'Real DB Rollback Test Idea',
+          problem: 'Testing transaction atomicity against real Postgres',
+          proposed_solution: 'Simulate mid-transaction constraint failure',
+          target_users: 'Developers and QA',
+          why_it_matters: 'Prevents data corruption and orphaned audit history rows',
+          current_stage: 'Concept',
+          contact_email: 'tx-test@example.com',
+          status: 'submitted',
+          version: 1,
+        },
+      });
+
+      // 3. Call updateStatusWithHistory with an invalid changedBy foreign key
+      //    (a non-existent user UUID).
+      //    In PostgreSQL, the UPDATE to 'ideas' succeeds first inside the transaction,
+      //    but the subsequent INSERT to 'ideas_status_history' fails the FOREIGN KEY
+      //    constraint on changed_by -> users(id).
+      const nonExistentUserId = '00000000-0000-0000-0000-000000000999';
 
       await expect(
         ideaRepository.updateStatusWithHistory({
-          id: 'test-idea-tx-1',
+          id: realIdea.id,
           expectedVersion: 1,
           toStatus: 'in_review',
-          changedBy: 'admin-1',
+          adminNotes: 'This should be rolled back completely',
+          changedBy: nonExistentUserId,
         })
-      ).rejects.toThrow('Simulated DB network failure during history insert');
+      ).rejects.toThrow();
+
+      // 4. Query the real idea row directly from Postgres (fresh read)
+      const ideaAfterRollback = await prisma.idea.findUnique({
+        where: { id: realIdea.id },
+      });
+
+      // Assert status is STILL 'submitted' and version is STILL 1 (NOT 'in_review' / 2)
+      expect(ideaAfterRollback).not.toBeNull();
+      expect(ideaAfterRollback!.status).toBe('submitted');
+      expect(ideaAfterRollback!.version).toBe(1);
+      expect(ideaAfterRollback!.admin_notes).toBeNull();
+      expect(ideaAfterRollback!.reviewed_by).toBeNull();
+
+      // 5. Query ideas_status_history in Postgres for this idea_id
+      const historyRows = await prisma.ideaStatusHistory.findMany({
+        where: { idea_id: realIdea.id },
+      });
+
+      // Assert zero history rows exist — no orphaned history record
+      expect(historyRows).toHaveLength(0);
+
+      // Clean up test data
+      await prisma.idea.delete({ where: { id: realIdea.id } });
+      await prisma.user.delete({ where: { id: testAdmin.id } });
     });
   });
 });

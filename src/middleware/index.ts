@@ -14,7 +14,7 @@ export function requestIdMiddleware(req: RequestWithId, res: Response, next: Nex
 }
 
 export function errorHandler(
-  err: Error & { statusCode?: number; code?: string },
+  err: Error & { statusCode?: number; code?: string; data?: any },
   req: RequestWithId,
   res: Response,
   _next: NextFunction
@@ -26,6 +26,7 @@ export function errorHandler(
         message: err.message,
         request_id: req.requestId,
       },
+      ...(err.data ? { data: err.data } : {}),
     });
     return;
   }
