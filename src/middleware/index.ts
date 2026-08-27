@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../utils/errors.js';
 
 export interface RequestWithId extends Request {
   requestId?: string;
@@ -12,16 +13,33 @@ export function requestIdMiddleware(req: RequestWithId, res: Response, next: Nex
   next();
 }
 
-export function errorHandler(err: Error & { status?: number; code?: string }, req: RequestWithId, res: Response, _next: NextFunction): void {
-  const status = err.status || 500;
-  const code = err.code || (status === 500 ? 'internal_error' : 'error');
-  const message = status === 500 ? 'An unexpected error occurred' : err.message;
+export function errorHandler(
+  err: Error & { statusCode?: number; code?: string },
+  req: RequestWithId,
+  res: Response,
+  _next: NextFunction
+): void {
+  if (err instanceof AppError) {
+    res.status(err.statusCode).json({
+      error: {
+        code: err.code,
+        message: err.message,
+        request_id: req.requestId,
+      },
+    });
+    return;
+  }
 
-  res.status(status).json({
+  // Handle unexpected errors (never leak stack trace or internal details)
+  console.error(`[INTERNAL_ERROR] ${req.requestId}:`, err);
+  res.status(500).json({
     error: {
-      code,
-      message,
+      code: 'internal_error',
+      message: 'An unexpected internal error occurred',
       request_id: req.requestId,
     },
   });
 }
+
+export * from './auth.js';
+export * from './rate-limit.js';

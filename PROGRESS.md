@@ -2,7 +2,7 @@
 
 - [x] scaffold
 - [x] schema/migrations
-- [ ] auth
+- [x] auth
 - [ ] idea pipeline
 - [ ] learning/courses
 - [ ] showcase (projects/people)

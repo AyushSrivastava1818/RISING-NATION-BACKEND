@@ -10,14 +10,21 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
-    "prisma:validate": "prisma validate"
+    "prisma:validate": "prisma validate",
+    "seed:admin": "tsx scripts/admin-bootstrap.ts"
   },
-  "keywords": ["rising-nation", "express", "prisma", "typescript"],
+  "keywords": [
+    "rising-nation",
+    "express",
+    "prisma",
+    "typescript"
+  ],
   "author": "Rising Nation",
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^6.4.1",
     "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
@@ -27,6 +34,7 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.5",
