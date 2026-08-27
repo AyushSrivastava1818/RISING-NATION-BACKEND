@@ -9,6 +9,6 @@
 - [ ] opportunities
 - [x] enquiries
 - [x] media upload (signed-upload flow: project screenshots, people photos)
-- [ ] observability
+- [x] observability (structured logging + request_id propagation, health/readiness checks, security hardening pass)
 - [ ] deployment config
 - [ ] frontend pages

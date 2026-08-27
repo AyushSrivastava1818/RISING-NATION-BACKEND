@@ -12,6 +12,7 @@ import {
   ValidationError,
   NotFoundError,
 } from '../utils/errors.js';
+import { logger } from '../utils/logger.js';
 
 export interface UserDto {
   id: string;
@@ -111,8 +112,12 @@ export class AuthService {
 
     const resetToken = createPasswordResetToken(user.id, user.password_hash);
 
-    // Stub email sender: in production/Slice 9 email is sent via EMAIL_PROVIDER_API_KEY
-    console.log(`[STUB EMAIL] Password reset token generated for ${user.email}: ${resetToken}`);
+    // Stub email sender: in production/Slice 9 email is sent via EMAIL_PROVIDER_API_KEY.
+    // Deliberately never logs the user's email or the raw token — a live reset
+    // token in logs is a credential-leakage risk (ENGINEERING.md §6.1/§6.5);
+    // the token reaches the caller only via the return value (and, non-production
+    // only, the debug_token response field in auth.routes.ts).
+    logger.info('stub_password_reset_email_sent', { user_id: user.id });
 
     return { success: true, resetToken };
   }

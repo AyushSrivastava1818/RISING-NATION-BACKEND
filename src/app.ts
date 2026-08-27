@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { apiRouter } from './api/index.js';
-import { errorHandler, requestIdMiddleware } from './middleware/index.js';
+import { errorHandler, requestIdMiddleware, accessLogMiddleware } from './middleware/index.js';
 import { config } from './config/index.js';
 
 export function createApp(): Express {
@@ -14,6 +14,7 @@ export function createApp(): Express {
   app.use(express.json());
   app.use(cookieParser());
   app.use(requestIdMiddleware);
+  app.use(accessLogMiddleware);
 
   app.use('/api', apiRouter);
 

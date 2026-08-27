@@ -12,15 +12,25 @@ import { adminGrowthRouter } from './admin-growth.routes.js';
 import { publicEnquiryRouter } from './enquiry.routes.js';
 import { adminEnquiryRouter } from './admin-enquiry.routes.js';
 import { requireAdmin, AuthenticatedRequest } from '../middleware/auth.js';
+import { prisma } from '../repositories/prisma.js';
 
 export const apiRouter = Router();
 
+// Liveness — process responding (ENGINEERING.md §6.5).
 apiRouter.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-apiRouter.get('/ready', (_req, res) => {
-  res.status(200).json({ status: 'ready' });
+// Readiness — database connection acquirable (ENGINEERING.md §6.5). Kept
+// separate from /health since an instance can be alive but unable to serve
+// requests; an orchestrator needs to know which is true.
+apiRouter.get('/ready', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({ status: 'ready' });
+  } catch {
+    res.status(503).json({ status: 'not_ready' });
+  }
 });
 
 // Auth routes

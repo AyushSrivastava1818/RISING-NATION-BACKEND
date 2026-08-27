@@ -3,6 +3,7 @@ import { NotificationService, notificationService } from './notification.service
 import { isLegalIdeaTransition } from '../utils/state-machine.js';
 import { IdeaStatus } from '../types/index.js';
 import { ConflictError, NotFoundError, ValidationError } from '../utils/errors.js';
+import { logger } from '../utils/logger.js';
 
 export interface SubmitIdeaDto extends CreateIdeaInput {}
 
@@ -42,7 +43,7 @@ export class IdeaService {
         contact_email: created.contact_email,
       });
     } catch (err: any) {
-      console.warn(`[NOTIFICATION_SWALLOWED] Notification failure swallowed for idea ${created.id}:`, err?.message || err);
+      logger.warn('notification_swallowed', { domain: 'idea', id: created.id, error: err?.message || String(err) });
     }
 
     return {

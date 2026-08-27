@@ -1,4 +1,5 @@
 import { config } from '../config/index.js';
+import { logger } from '../utils/logger.js';
 
 export interface IdeaNotificationPayload {
   id: string;
@@ -35,8 +36,8 @@ export class NotificationService {
       await Promise.race([sendPromise, timeoutPromise]);
       return true;
     } catch (err: any) {
-      console.warn(`[NOTIFICATION_SWALLOWED] Failed to send admin notification for idea ${payload.id}:`, err?.message || err);
-      // Swallowed and logged: do not throw!
+      // Swallowed, never thrown (§3.3) — logged without contact_email (§6.5: never log PII at info level).
+      logger.warn('notification_swallowed', { domain: 'idea', id: payload.id, error: err?.message || String(err) });
       return false;
     }
   }
@@ -64,14 +65,20 @@ export class NotificationService {
       await Promise.race([sendPromise, timeoutPromise]);
       return true;
     } catch (err: any) {
-      console.warn(`[NOTIFICATION_SWALLOWED] Failed to send admin notification for enquiry ${payload.id}:`, err?.message || err);
+      logger.warn('notification_swallowed', { domain: 'enquiry', id: payload.id, error: err?.message || String(err) });
       return false;
     }
   }
 
-  private async sendEmailStub(to: string, subject: string, body: string): Promise<void> {
-    // Stub email sender: Slice 9 / real provider wiring connects to actual email gateway
-    console.log(`[STUB EMAIL] To: ${to} | Subject: ${subject} | Body: ${body}`);
+  /**
+   * Stub email sender: Slice 9 / real provider wiring connects to actual
+   * email gateway. `body` is deliberately never logged — it embeds the
+   * submitter's contact_email, which must never be logged at info level
+   * (ENGINEERING.md §6.5). A real provider would send `body` over
+   * SMTP/API, not stdout.
+   */
+  private async sendEmailStub(to: string, subject: string, _body: string): Promise<void> {
+    logger.info('stub_email_sent', { to, subject });
   }
 }
 

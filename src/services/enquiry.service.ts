@@ -13,6 +13,7 @@ import * as enquiryRepo from '../repositories/enquiry.repository.js';
 import * as categoryRepo from '../repositories/course.repository.js';
 import { notificationService } from './notification.service.js';
 import { UnprocessableError } from '../utils/errors.js';
+import { logger } from '../utils/logger.js';
 import type { Enquiry } from '@prisma/client';
 import type { ListEnquiriesFilter } from '../repositories/enquiry.repository.js';
 
@@ -62,7 +63,7 @@ export async function submitEnquiry(input: SubmitEnquiryDto): Promise<SubmitEnqu
       contact_email: created.contact_email,
     });
   } catch (err: any) {
-    console.warn(`[NOTIFICATION_SWALLOWED] Notification failure swallowed for enquiry ${created.id}:`, err?.message || err);
+    logger.warn('notification_swallowed', { domain: 'enquiry', id: created.id, error: err?.message || String(err) });
   }
 
   return { id: created.id, status: created.status };
