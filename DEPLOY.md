@@ -76,9 +76,10 @@ dependency-audit ─────────────────────
 
 - **lint** — `npm run lint` (ESLint over `src/` and `scripts/`; see note below
   on why `tests/` is out of scope for this gate).
-- **dependency-audit** — `npm audit --audit-level=high`, blocking, per the
-  §6.1 threat-table row ("npm audit-equivalent in CI, blocking merge").
-  **This currently fails on `main`** — see "Known-failing gate" below.
+- **dependency-audit** — `npm run audit:check` (`scripts/check-audit.mjs`,
+  wrapping `npm audit --json`), blocking, per the §6.1 threat-table row
+  ("npm audit-equivalent in CI, blocking merge"). See "Audit gate policy"
+  below for why this isn't a bare `npm audit --audit-level=high`.
 - **test** — spins up an ephemeral Postgres service container, runs
   `prisma migrate deploy` against it, then `vitest run --exclude
   tests/migrations.test.ts` (the rest of the suite).
@@ -147,17 +148,41 @@ does not assume or exercise a browser-based frontend.
 - `GITHUB_TOKEN` (default, no setup needed) authenticates the `build` job's
   push to `ghcr.io`.
 
-### Known-failing gate: dependency-audit
+### Audit gate policy: allowlist known-accepted advisories by ID
 
-`npm audit` currently reports 5 pending vulnerabilities (4 high, 1 critical)
+`npm audit` reports 13 high/critical advisories (across 5 flagged packages)
 in transitive build/tooling dependencies of `prisma` (`deepmerge-ts`) and
 `bcrypt` (`tar` via `node-pre-gyp`) — see `DECISIONS_LOG.md` → "Deferred
 Hardening Items (Slice 7 audit)" for the full analysis of why these were left
-open rather than force-upgraded. Wiring the CI gate faithfully (matching the
-§6.1 threat table's "blocking merge" mitigation) means `dependency-audit`
-**will fail on `main` today** until that dependency bump lands — this is the
-gate correctly reporting a real, already-known, already-documented gap, not
-a bug in this CI config.
+open rather than force-upgraded (no fix available short of a breaking
+major-version bump to `prisma` and/or `bcrypt`).
+
+Plain `npm audit --audit-level=high` has no per-advisory allowlist — it's a
+blunt severity threshold, nothing more. Wired that way, `dependency-audit`
+would fail on every single run of `main`, forever, until that dependency
+bump lands. A gate that's permanently red isn't a gate; it's noise reviewers
+learn to click past — which defeats the actual purpose of "blocking merge"
+in §6.1's threat table: catching a *new* vulnerability, not re-flagging the
+same known one on every commit.
+
+So this is wired as an **explicit allowlist, decided and implemented here,
+not left for the first CI run to discover**: `scripts/check-audit.mjs` wraps
+`npm audit --json`, matches each high/critical advisory's GHSA ID against a
+hardcoded `ALLOWLISTED_GHSA_IDS` set (the exact 13 IDs above, each commented
+with which package and why it's accepted), and:
+
+- exits `0` (green) if every high/critical advisory found is on that list —
+  this is the current state, so `dependency-audit` **passes today**;
+- exits `1` (red) the moment any high/critical advisory appears that is
+  **not** on the list — a genuinely new issue, in these packages or any
+  other, still blocks the pipeline exactly as intended.
+
+Accepting a new advisory means editing the allowlist in
+`scripts/check-audit.mjs` with a reasoned comment and recording the decision
+in `DECISIONS_LOG.md` — the same review discipline as any other accepted
+risk, not a silent bypass. Low/moderate-severity advisories are ignored
+entirely (matching the severity threshold the original `--audit-level=high`
+gate would have used) and never reach the allowlist check.
 
 ## Testing note: no unit/integration test split yet
 

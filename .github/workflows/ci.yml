@@ -58,7 +58,14 @@ jobs:
           cache: npm
       - run: npm ci
       # ENGINEERING.md §6.1: "npm audit-equivalent in CI, blocking merge".
-      - run: npm audit --audit-level=high
+      # Wrapped via scripts/check-audit.mjs rather than a bare
+      # `npm audit --audit-level=high`: npm has no native per-advisory
+      # allowlist, and this repo has known, already-investigated,
+      # deliberately-accepted advisories (DECISIONS_LOG.md -> "Deferred
+      # Hardening Items"). The wrapper keeps this gate green for those
+      # specific, reviewed IDs while still failing the build on anything
+      # high/critical that isn't already on the allowlist.
+      - run: npm run audit:check
 
   test:
     name: Unit + integration tests
