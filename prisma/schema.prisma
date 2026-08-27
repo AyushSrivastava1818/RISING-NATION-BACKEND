@@ -54,8 +54,6 @@ model PeopleProfile {
   linkedin_url String?
   photo_url    String?
   featured     Boolean  @default(false)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
 
   user            User?           @relation(fields: [user_id], references: [id], onDelete: SetNull)
   project_members ProjectMember[]
@@ -65,13 +63,11 @@ model PeopleProfile {
 }
 
 model Category {
-  id         String   @id @default(uuid()) @db.Uuid
-  name       String
-  slug       String   @unique
-  type       String // learning | service
-  group      String? // e.g. business | creator
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id    String  @id @default(uuid()) @db.Uuid
+  name  String
+  slug  String  @unique
+  type  String // learning | service
+  group String? // business | creator (per API.md §3)
 
   courses Course[]
 
@@ -79,17 +75,15 @@ model Category {
 }
 
 model Course {
-  id             String   @id @default(uuid()) @db.Uuid
+  id             String  @id @default(uuid()) @db.Uuid
   title          String
-  description    String?  @db.Text
+  description    String? @db.Text
   level          String // Beginner | Intermediate | Advanced
-  category_id    String   @db.Uuid
+  category_id    String  @db.Uuid
   content_source String // youtube | native
   content_ref    String // YouTube video/playlist ID or native content reference
   thumbnail_url  String?
-  published      Boolean  @default(true)
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
+  published      Boolean @default(true)
 
   category Category @relation(fields: [category_id], references: [id], onDelete: Restrict)
 
@@ -107,8 +101,6 @@ model Project {
   result             String?  @db.Text
   status             String // in_progress | completed
   featured           Boolean  @default(false)
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
 
   media   ProjectMedia[]
   members ProjectMember[]
@@ -118,12 +110,10 @@ model Project {
 }
 
 model ProjectMedia {
-  id         String   @id @default(uuid()) @db.Uuid
-  project_id String   @db.Uuid
+  id         String @id @default(uuid()) @db.Uuid
+  project_id String @db.Uuid
   media_url  String
   media_type String // image | video
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
 
   project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
@@ -131,16 +121,14 @@ model ProjectMedia {
 }
 
 model ProjectMember {
-  id                String   @id @default(uuid()) @db.Uuid
-  project_id        String   @db.Uuid
-  profile_id        String   @db.Uuid
+  project_id        String @db.Uuid
+  profile_id        String @db.Uuid
   contribution_role String
-  created_at        DateTime @default(now())
 
   project Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
   profile PeopleProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
 
-  @@unique([project_id, profile_id])
+  @@id([project_id, profile_id])
   @@map("project_members")
 }
 
@@ -159,7 +147,7 @@ model Idea {
   contact_email        String
   contact_phone        String?
   status               String   @default("submitted") // submitted | in_review | evaluated | credited | shortlisted | in_development
-  version              Int      @default(1) // Optimistic locking
+  version              Int      @default(1) // Optimistic locking per DATABASE.md Data Integrity
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
 
@@ -197,7 +185,6 @@ model Enquiry {
   status             String   @default("new") // new | contacted | closed
   user_id            String?  @db.Uuid
   created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
 
   user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
 

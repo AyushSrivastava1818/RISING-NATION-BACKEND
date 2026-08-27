@@ -27,3 +27,13 @@ This document records architectural, stack, and specification decisions resolved
 - **OD-9: Is CAPTCHA needed on public forms?** → `(a) Not built for V1, rate-limiting only` (source: ENGINEERING.md §6.13)
 - **OD-10: Data retention policy (idea documents, backups, member PII if applicable)** → `PROVISIONAL — placeholder 30-day automated backup retention and private idea document retention — NOT a confirmed default, needs client/product confirmation before this is treated as final. Flagged because this is a policy decision and potential compliance obligation, not an engineering one (ENGINEERING.md §6.13: "No default — policy decision, not engineering / N/A"); retention windows in deployment/infrastructure config (Slice 8) are placeholders pending confirmation, not final infrastructure configuration.`
 - **OD-11: Individually-attributable admin accounts, or one shared login?** → `(a) Individual accounts` (source: ENGINEERING.md §6.13)
+
+---
+
+## Schema Deviations from DATABASE.md
+
+- **SCHEMA-DEVIATION**: `categories.group` added beyond DATABASE.md spec. Reason: Required by `API.md` §3 endpoint `GET /categories?type=service&group=business` to filter business vs. creator services. Not present in original spec because: `DATABASE.md` ERD only listed `type` without the `group` sub-classifier required by the public API.
+- **SCHEMA-DEVIATION**: `categories.slug` added beyond DATABASE.md spec. Reason: URL-safe unique identifier for clean web routing. Not present in original spec because: `DATABASE.md` ERD used `name` as the sole text attribute.
+- **SCHEMA-DEVIATION**: `users.password_hash` added beyond DATABASE.md spec. Reason: Secure bcrypt authentication for admin accounts per `ARCHITECTURE.md` §3.6. Not present in original spec because: `DATABASE.md` ERD omitted authentication credential fields.
+- **SCHEMA-DEVIATION**: `users.updated_at` added beyond DATABASE.md spec. Reason: Track account password and profile update timestamps. Not present in original spec because: `DATABASE.md` ERD omitted lifecycle timestamp columns.
+- **SCHEMA-DEVIATION**: `sessions` table added beyond DATABASE.md spec. Reason: Server-side invalidatable session storage required by `ARCHITECTURE.md` §3.6. Not present in original spec because: `DATABASE.md` modeled core domain entities rather than ephemeral auth session state.

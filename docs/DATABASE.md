@@ -1,22 +1,36 @@
 # Database — Rising Nation (Proposed)
 
-> All entities below are **Recommended** — a proposal to satisfy the fields and behaviors listed as **Confirmed (spec)** in `REQUIREMENTS.md`. Fields taken verbatim from the spec are marked `(spec)`; everything else is inferred to make the spec buildable. No code or migrations exist yet.
+> All entities below are **Recommended** — a proposal to satisfy the fields and behaviors listed as **Confirmed (spec)** in `REQUIREMENTS.md`. Fields taken verbatim from the spec are marked `(spec)`; everything else is inferred to make the spec buildable.
 
 ## 1. ER Diagram
 
 ```mermaid
 erDiagram
     USERS ||--o{ IDEAS : submits
+    USERS ||--o{ IDEAS_STATUS_HISTORY : "reviews as actor"
+    USERS ||--o{ SESSIONS : has
     USERS ||--o{ APPLICATIONS : submits
     USERS ||--o{ ENQUIRIES : submits
     USERS ||--o{ PROJECT_MEMBERS : "is a"
+    IDEAS ||--o{ IDEAS_STATUS_HISTORY : has
+
     USERS {
         uuid id PK
         string name
         string email
+        string password_hash "(for bcrypt auth per ARCHITECTURE.md §3.6)"
         string role "public | member | admin"
         string growth_level "learner|contributor|intern|builder|lead"
         timestamp created_at
+        timestamp updated_at
+    }
+
+    SESSIONS {
+        uuid id PK
+        uuid user_id FK
+        timestamp created_at
+        timestamp expires_at
+        timestamp last_active_at
     }
 
     PEOPLE_PROFILES {
@@ -47,7 +61,9 @@ erDiagram
     CATEGORIES {
         uuid id PK
         string name "(spec) Web Dev, AI/ML, DevOps, etc."
+        string slug
         string type "learning | service"
+        string group "business | creator (per API.md §3)"
     }
 
     PROJECTS {
@@ -90,8 +106,18 @@ erDiagram
         string contact_email "(spec)"
         string contact_phone "(spec)"
         string status "(spec) submitted|in_review|evaluated|credited|shortlisted|in_development"
-        text admin_notes
-        uuid reviewed_by FK
+        int version "optimistic locking"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    IDEAS_STATUS_HISTORY {
+        uuid id PK
+        uuid idea_id FK
+        string from_status
+        string to_status
+        uuid actor_id FK
+        text notes
         timestamp created_at
     }
 
@@ -159,13 +185,13 @@ erDiagram
 `PEOPLE_PROFILES.user_id` is a nullable FK linking the two when both exist.
 
 ### `growth_level` on USERS
-Directly implements Section 3.3's ladder. **Recommended:** this field is admin-writable only (no self-promotion), with the *reasoning* for a promotion left in `admin_notes`-style free text on a lightweight `growth_level_history` table if an audit trail is wanted — **Needs confirmation** on whether that history table is in scope for V1 or deferred.
+Directplements Section 3.3's ladder. **Recommended:** this field is admin-writable only (no self-promotion), with the *reasoning* for a promotion left in `admin_notes`-style free text on a lightweight `growth_level_history` table if an audit trail is wanted — **Needs confirmation** on whether that history table is in scope for V1 or deferred.
 
 ### `courses.content_source` / `content_ref`
 Implements the content-source abstraction from `ARCHITECTURE.md` §4. This is the single most important schema decision in the document because it's the one explicit "don't make us rebuild this" constraint in the entire spec.
 
-### IDEAS.status values
-Spec gives the pipeline as *Idea → Review → Evaluation → Credits/Recognition → Possible Development*, but never gives exact status strings. The enum above (`submitted|in_review|evaluated|credited|shortlisted|in_development`) is a **Recommended** mapping — **Needs confirmation** with the client/admin team before building the admin status-change UI, since the UI's dropdown options are literally these values.
+### IDEAS and IDEAS_STATUS_HISTORY
+Spec gives the pipeline as *Idea → Review → Evaluation → Credits/Recognition → Possible Development*, with recommended statuses (`submitted|in_review|evaluated|credited|shortlisted|in_development`). Status transitions, actor attribution (`actor_id`), and review notes are tracked in `IDEAS_STATUS_HISTORY` via atomic transactions with optimistic concurrency locking on `IDEAS.version`.
 
 ### ENQUIRIES unifies Business Solutions (§5) and Creator Support (§6)
 Both are "pick service(s) + leave contact info + message" forms per spec — same shape, different `services_requested` vocabulary and a `type` discriminator. Kept as one table rather than two to avoid duplicate admin screens for a form that structurally repeats.
@@ -175,10 +201,11 @@ Spec only names these in the Admin CRUD list (Section 11) with zero field detail
 
 ## 3. Indexing (Recommended, once query patterns are known)
 
-Cannot be finalized without real query patterns, but the predictable ones from the spec:
 - `courses(category_id, published)` — every Learning page load filters by category.
 - `projects(featured)`, `people_profiles(featured)` — Home page queries these directly (Section 1).
 - `ideas(status)`, `enquiries(status)`, `applications(status)` — every admin review screen (Section 11) filters/sorts by status.
+- `ideas_status_history(idea_id)` — fast retrieval of idea status progression.
+- `sessions(user_id)`, `sessions(expires_at)` — authentication session validation and cleanup.
 
 ## 4. Explicitly deferred / not modeled
 
