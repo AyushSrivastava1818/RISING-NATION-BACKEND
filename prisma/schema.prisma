@@ -23,7 +23,6 @@ model User {
   people_profile      PeopleProfile?
   submitted_ideas     Idea[]              @relation("IdeaSubmittedBy")
   idea_status_changes IdeaStatusHistory[] @relation("IdeaStatusActor")
-  enquiries           Enquiry[]
   sessions            Session[]
 
   @@map("users")
@@ -189,10 +188,7 @@ model Enquiry {
   contact_phone      String?
   message            String   @db.Text
   status             String   @default("new") // new | contacted | closed
-  user_id            String?  @db.Uuid
   created_at         DateTime @default(now())
-
-  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@map("enquiries")

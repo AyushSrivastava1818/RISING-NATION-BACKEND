@@ -23,6 +23,7 @@
 | `email` | string | No | — | UNIQUE |
 | `password_hash` | string | No | — | bcrypt; never logged |
 | `role` | enum | No | `'admin'` (V1) | `admin` in V1; `member` if OD-1 confirms |
+| `name` | string | No | — | **Implementation deviation** — required for human-readable actor attribution in `ideas_status_history` admin UI. Not every admin has a `people_profiles` row (the FK is nullable/optional). Pulling name from `people_profiles` would make that link mandatory for all admins, which this spec does not specify. See `DECISIONS_LOG.md`. |
 | `growth_level` | enum, nullable | Yes | null | `learner\|contributor\|intern\|builder\|lead` — REQ-GROWTH-001 |
 | `created_at` / `updated_at` | timestamptz | No | now() | |
 
