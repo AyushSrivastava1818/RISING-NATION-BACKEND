@@ -15,7 +15,8 @@
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "seed:admin": "tsx scripts/admin-bootstrap.ts"
+    "seed:admin": "tsx scripts/admin-bootstrap.ts",
+    "seed:categories": "tsx scripts/categories-seed.ts"
   },
   "keywords": [
     "rising-nation",

@@ -23,8 +23,20 @@ npm install
 cp .env.example .env        # fill in DATABASE_URL and any real credentials
 npx prisma migrate deploy   # applies the full migration history
 npm run seed:admin          # creates the bootstrap admin account (first run only)
+npm run seed:categories     # populates categories only — idempotent, safe to re-run
 npm run dev                 # starts the API with hot reload
 ```
+
+`seed:categories` (`scripts/categories-seed.ts`) upserts the fixed category
+taxonomy given in `REQUIREMENTS.md` (REQ-LEARN-003 learning topics,
+REQ-BIZ-001 business services, REQ-CREATOR-001 creator services) — that list
+is part of the spec, not placeholder content, so it's safe to seed
+mechanically. It deliberately does **not** touch `courses`, `projects`, or
+`people_profiles`: those need real content — actual course material, actual
+project case studies, actual team bios — that isn't specified anywhere in
+the docs. Seeding those with placeholder text would look like finished
+content and hide that it's still needed from the Rising Nation team; they're
+empty tables by design, not a gap in this build.
 
 **Full test suite** (requires a real Postgres instance — most tests exercise the full HTTP stack against it, not mocks; see `DEPLOY.md` → "Testing note" for why there's no separate unit/integration split yet):
 

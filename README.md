@@ -66,6 +66,7 @@ npm install
 cp .env.example .env        # fill in DATABASE_URL and any real credentials
 npx prisma migrate deploy   # applies the full migration history
 npm run seed:admin          # creates the bootstrap admin account
+npm run seed:categories     # populates categories (learning/business/creator) — idempotent, safe to re-run
 npm run dev                 # starts the API with hot reload
 ```
 
